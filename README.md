@@ -28,9 +28,10 @@ Para executar a API em outro terminal:
 npm run dev:api
 ```
 
-Para sincronizar índices, configure a chave oficial no `.env` e execute:
+Para sincronizar índices sem chave da API, instale o Chromium do Playwright uma vez. Com `INDEX_PROVIDER=auto`, o backend usa a API quando houver chave e as tabelas públicas quando ela estiver ausente:
 
 ```bash
+npm run playwright:install --workspace=@contabil/api
 npm run sync:indices --workspace=@contabil/api
 ```
 

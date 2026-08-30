@@ -1,10 +1,11 @@
+import "dotenv/config";
 import { getEnvironment } from "../config/env.js";
-import { DebitIndexProvider } from "../providers/debit-index-provider.js";
+import { createIndexProvider } from "../providers/index-provider-factory.js";
 import { EconomicIndexRepository } from "../repositories/economic-index-repository.js";
 import { SyncEconomicIndicesService } from "../services/sync-economic-indices-service.js";
 
 const env = getEnvironment();
-const provider = new DebitIndexProvider({ baseUrl: env.DEBIT_API_URL, apiKey: env.DEBIT_API_KEY });
+const provider = createIndexProvider(env);
 const repository = new EconomicIndexRepository();
 const service = new SyncEconomicIndicesService({ provider, repository, targetSlugs: ["ipca", "ipca_e", "inpc", "igp_m", "tr"] });
 const to = new Date().toISOString().slice(0, 7);

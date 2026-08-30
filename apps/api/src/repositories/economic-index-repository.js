@@ -27,8 +27,8 @@ export class EconomicIndexRepository {
   upsertCatalogItem(item) {
     return this.database.economicIndex.upsert({
       where: { slug: item.slug },
-      create: { ...item, source: "Debit API" },
-      update: { name: item.name, periodicity: item.periodicity, basis: item.basis, active: true },
+      create: { slug: item.slug, name: item.name, source: item.source ?? "Debit API", periodicity: item.periodicity, basis: item.basis },
+      update: { name: item.name, source: item.source ?? "Debit API", periodicity: item.periodicity, basis: item.basis, active: true },
     });
   }
 
@@ -37,7 +37,7 @@ export class EconomicIndexRepository {
       const key = { economicIndexId_referenceDate: { economicIndexId, referenceDate: value.referenceDate } };
       const existing = await transaction.economicIndexValue.findUnique({ where: key });
       if (!existing) {
-        await transaction.economicIndexValue.create({ data: { economicIndexId, ...value, sourceUrl: "https://mcp.debit.com.br/v1" } });
+        await transaction.economicIndexValue.create({ data: { economicIndexId, ...value, sourceUrl: value.sourceUrl ?? "https://mcp.debit.com.br/v1" } });
         await transaction.economicIndexValueHistory.create({ data: historyData({ economicIndexId, syncRunId, value }) });
         return "inserted";
       }

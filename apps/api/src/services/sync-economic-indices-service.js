@@ -6,8 +6,9 @@ export class SyncEconomicIndicesService {
   }
 
   async execute({ from, to, requestedBy = "system" } = {}) {
-    const run = await this.repository.createSyncRun({ source: "Debit API", requestedBy, fromPeriod: from, toPeriod: to });
+    const run = await this.repository.createSyncRun({ source: this.provider.sourceName ?? "Economic index provider", requestedBy, fromPeriod: from, toPeriod: to });
     const totals = { inserted: 0, updated: 0, unchanged: 0, failed: 0 };
+    const errors = [];
 
     try {
       const catalog = await this.provider.listIndices();
@@ -24,17 +25,21 @@ export class SyncEconomicIndicesService {
             const result = await this.repository.upsertValue({ economicIndexId: index.id, syncRunId: run.id, value });
             totals[result] += 1;
           }
-        } catch {
+        } catch (error) {
           totals.failed += 1;
+          errors.push(`${item.slug}: ${error.message}`);
         }
       }
 
       const status = totals.failed === 0 ? "SUCCEEDED" : totals.inserted + totals.updated + totals.unchanged > 0 ? "PARTIAL" : "FAILED";
-      await this.repository.finishSyncRun(run.id, { ...totals, status, error: missingSlugs.length ? `Missing indices: ${missingSlugs.join(", ")}` : null });
-      return { syncRunId: run.id, status, ...totals };
+      if (missingSlugs.length) errors.push(`Índices ausentes: ${missingSlugs.join(", ")}`);
+      await this.repository.finishSyncRun(run.id, { ...totals, status, error: errors.length ? errors.join(" | ").slice(0, 2_000) : null });
+      return { syncRunId: run.id, status, ...totals, errors };
     } catch (error) {
       await this.repository.finishSyncRun(run.id, { ...totals, status: "FAILED", failed: totals.failed + 1, error: error.message });
       throw error;
+    } finally {
+      await this.provider.close?.();
     }
   }
 }

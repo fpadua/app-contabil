@@ -1,4 +1,4 @@
-import { DebitIndexProvider } from "../providers/debit-index-provider.js";
+import { createIndexProvider } from "../providers/index-provider-factory.js";
 import { EconomicIndexRepository } from "../repositories/economic-index-repository.js";
 import { SyncEconomicIndicesService } from "../services/sync-economic-indices-service.js";
 import { getEnvironment } from "../config/env.js";
@@ -16,8 +16,7 @@ export async function indexRoutes(app) {
     const parsed = syncRequestSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ code: "INVALID_SYNC_PERIOD", issues: parsed.error.issues });
     const env = getEnvironment();
-    if (!env.DEBIT_API_KEY) return reply.status(503).send({ code: "DEBIT_API_NOT_CONFIGURED", message: "Configure DEBIT_API_KEY before synchronizing." });
-    const provider = new DebitIndexProvider({ baseUrl: env.DEBIT_API_URL, apiKey: env.DEBIT_API_KEY });
+    const provider = createIndexProvider(env);
     const service = new SyncEconomicIndicesService({ provider, repository, targetSlugs });
     const result = await service.execute({ ...parsed.data, requestedBy: request.headers["x-user-id"] ?? "manual" });
     return reply.status(result.status === "FAILED" ? 502 : 200).send(result);
