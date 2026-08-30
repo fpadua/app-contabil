@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "../config/load-environment.js";
 import { getEnvironment } from "../config/env.js";
 import { createIndexProvider } from "../providers/index-provider-factory.js";
 import { EconomicIndexRepository } from "../repositories/economic-index-repository.js";

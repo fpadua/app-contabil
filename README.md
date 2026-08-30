@@ -12,7 +12,7 @@ Aplicação para cálculos contábeis e judiciais com memória de cálculo, atua
 
 ## Executar localmente
 
-Requisitos: Node.js 20.9 ou superior e PostgreSQL.
+Requisitos: Node.js 20.9 ou superior e PostgreSQL. O arquivo `.env` deve permanecer na raiz do projeto; a API e os jobs dos workspaces carregam esse arquivo automaticamente.
 
 ```bash
 cp .env.example .env
