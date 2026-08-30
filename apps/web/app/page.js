@@ -1,6 +1,5 @@
-import { Sidebar } from "../components/sidebar";
-import { CalculationWizard } from "../components/calculation-wizard";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <main className="app-shell"><Sidebar /><CalculationWizard /></main>;
+  redirect("/painel");
 }
