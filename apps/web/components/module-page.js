@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Download, Plus, RefreshCw, Search } from "lucide-react";
 
-export function ModulePage({ eyebrow, title, description, actionLabel, columns, rows, stats = [], actionIcon = "plus" }) {
+export function ModulePage({ eyebrow, title, description, actionLabel, columns, rows, stats = [], actionIcon = "plus", onAction, actionDisabled = false, statusMessage }) {
   const [query, setQuery] = useState("");
   const filteredRows = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("pt-BR");
@@ -16,8 +16,10 @@ export function ModulePage({ eyebrow, title, description, actionLabel, columns, 
     <section className="workspace module-workspace">
       <header className="module-header">
         <div><span className="module-eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>
-        <button className="primary-button module-action" type="button"><ActionIcon size={17} /> {actionLabel}</button>
+        <button className="primary-button module-action" disabled={actionDisabled} onClick={onAction} type="button"><ActionIcon className={actionDisabled ? "spinning" : ""} size={17} /> {actionLabel}</button>
       </header>
+
+      {statusMessage && <div className="module-status" role="status">{statusMessage}</div>}
 
       {stats.length > 0 && <div className="stat-grid">
         {stats.map((stat) => <article className="stat-card" key={stat.label}><span>{stat.label}</span><strong>{stat.value}</strong><small>{stat.hint}</small></article>)}
