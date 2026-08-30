@@ -1,5 +1,9 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { AppShell } from "../../components/app-shell";
 import { ModulePage } from "../../components/module-page";
+import { readRecords, RECORD_KEYS } from "../../lib/local-records";
 
 const columns = [
   { key: "name", label: "Documento", width: "1.7fr" },
@@ -15,5 +19,8 @@ const rows = [
 ];
 
 export default function DocumentsPage() {
-  return <AppShell><ModulePage eyebrow="ARQUIVOS" title="Documentos" description="Consulte documentos, planilhas e memórias vinculadas aos cálculos." actionLabel="Enviar documento" columns={columns} rows={rows} stats={[{ label: "Documentos", value: "86", hint: "12 neste mês" }, { label: "Em revisão", value: "4", hint: "Aguardando conferência" }, { label: "Armazenamento", value: "1,8 GB", hint: "Uso demonstrativo" }]} /></AppShell>;
+  const [visibleRows, setVisibleRows] = useState(rows);
+  useEffect(() => setVisibleRows([...readRecords(RECORD_KEYS.documents), ...rows]), []);
+
+  return <AppShell><ModulePage eyebrow="ARQUIVOS" title="Documentos" description="Consulte documentos, planilhas e memórias vinculadas aos cálculos." actionLabel="Novo documento" actionHref="/documentos/novo" columns={columns} rows={visibleRows} stats={[{ label: "Documentos", value: "86", hint: "12 neste mês" }, { label: "Em revisão", value: "4", hint: "Aguardando conferência" }, { label: "Armazenamento", value: "1,8 GB", hint: "Uso demonstrativo" }]} /></AppShell>;
 }

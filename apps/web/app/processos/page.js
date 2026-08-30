@@ -1,5 +1,9 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { AppShell } from "../../components/app-shell";
 import { ModulePage } from "../../components/module-page";
+import { readRecords, RECORD_KEYS } from "../../lib/local-records";
 
 const columns = [
   { key: "process", label: "Processo/contrato", width: "1.5fr" },
@@ -16,5 +20,8 @@ const rows = [
 ];
 
 export default function ProcessesPage() {
-  return <AppShell><ModulePage eyebrow="GESTÃO" title="Processos" description="Organize contratos, demandas e cálculos relacionados." actionLabel="Novo processo" columns={columns} rows={rows} stats={[{ label: "Processos ativos", value: "18", hint: "+3 no mês" }, { label: "Em conferência", value: "5", hint: "2 prioritários" }, { label: "Concluídos", value: "64", hint: "Histórico completo" }]} /></AppShell>;
+  const [visibleRows, setVisibleRows] = useState(rows);
+  useEffect(() => setVisibleRows([...readRecords(RECORD_KEYS.processes), ...rows]), []);
+
+  return <AppShell><ModulePage eyebrow="GESTÃO" title="Processos" description="Organize contratos, demandas e cálculos relacionados." actionLabel="Novo processo" actionHref="/processos/novo" columns={columns} rows={visibleRows} stats={[{ label: "Processos ativos", value: "18", hint: "+3 no mês" }, { label: "Em conferência", value: "5", hint: "2 prioritários" }, { label: "Concluídos", value: "64", hint: "Histórico completo" }]} /></AppShell>;
 }
