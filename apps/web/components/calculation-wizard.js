@@ -110,20 +110,97 @@ function RulesStep({ form, update }) {
 }
 
 function ResultStep({ form }) {
+  const columns = resultColumns(form);
+  const rows = resultRows(form);
+  const gridTemplateColumns = columns.map((column) => column.width ?? "minmax(118px, 1fr)").join(" ");
+
   return <div className="step-content"><span className="result-icon"><Check size={28} /></span><h2>Memória de cálculo preparada</h2>
     <p className="section-description">O resultado preserva os dados de entrada, as competências utilizadas e a versão de cada regra.</p>
-    <div className="result-table" role="table" aria-label="Prévia da memória de cálculo">
-      <div className="result-row header"><span>Competência</span><span>Índice</span><span>Fator</span><span>Valor corrigido</span></div>
-      <div className="result-row"><span>01/2023</span><span>{form.index}</span><span>1,0055</span><span>R$ 10.055,00</span></div>
-      <div className="result-row"><span>02/2023</span><span>{form.index}</span><span>1,0131</span><span>R$ 10.131,00</span></div>
-      <div className="result-row"><span>…</span><span>…</span><span>…</span><span>…</span></div>
-      <div className="result-row"><span>05/2024</span><span>{form.index}</span><span>1,097519</span><span>R$ 10.975,19</span></div>
+    <div className="result-table-scroll">
+      <div className="result-table" role="table" aria-label={`Prévia da memória de cálculo de ${form.typeLabel}`} style={{ minWidth: `${Math.max(columns.length * 128, 620)}px` }}>
+        <div className="result-row header" role="row" style={{ gridTemplateColumns }}>
+          {columns.map((column) => <span key={column.key} role="columnheader">{column.label}</span>)}
+        </div>
+        {rows.map((row) => <div className="result-row" key={row.id} role="row" style={{ gridTemplateColumns }}>
+          {columns.map((column) => <span key={column.key} role="cell">{row[column.key]}</span>)}
+        </div>)}
+      </div>
     </div>
   </div>;
 }
 
+function resultColumns(form) {
+  const financialColumns = resultFinancialColumns(form);
+  if (form.type === "salary") {
+    return [
+      { key: "competence", label: "Competência" },
+      { key: "description", label: "Descritivo", width: "minmax(155px, 1.35fr)" },
+      { key: "amountDue", label: "Valor devido" },
+      { key: "amountPaid", label: "Valor pago" },
+      { key: "difference", label: "Valor da diferença" },
+      { key: "factor", label: "Fator" },
+      ...financialColumns,
+      { key: "corrected", label: "Valor corrigido" },
+    ];
+  }
+
+  return [
+    { key: "competence", label: "Competência" },
+    { key: "description", label: "Descritivo", width: "minmax(170px, 1.45fr)" },
+    { key: "amount", label: "Valor" },
+    { key: "factor", label: "Fator" },
+    ...financialColumns,
+    { key: "corrected", label: "Valor corrigido" },
+  ];
+}
+
+function resultFinancialColumns(form) {
+  const interest = parseBrazilianNumber(form.interest);
+  const usesSelic = interest === 0 || form.index.toLocaleLowerCase("pt-BR").includes("selic");
+  const columns = [];
+  if (interest > 0) columns.push({ key: "interest", label: "Juros" });
+  if (usesSelic) columns.push({ key: "selic", label: "Taxa Selic" });
+  return columns;
+}
+
+function resultRows(form) {
+  const interest = parseBrazilianNumber(form.interest);
+  const interestLabel = `${interest.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}% a.m.`;
+  const periods = [
+    { id: "2023-01", competence: "01/2023", factor: "1,0055", selic: "1,12%", corrected: "R$ 10.055,00" },
+    { id: "2023-02", competence: "02/2023", factor: "1,0131", selic: "0,92%", corrected: "R$ 10.131,00" },
+    { id: "ellipsis", competence: "…", factor: "…", selic: "…", corrected: "…", ellipsis: true },
+    { id: "2024-05", competence: "05/2024", factor: "1,097519", selic: "0,83%", corrected: "R$ 10.975,19" },
+  ];
+
+  return periods.map((period) => {
+    if (period.ellipsis) {
+      return {
+        ...period, description: "…", amount: "…", amountDue: "…", amountPaid: "…",
+        difference: "…", interest: "…",
+      };
+    }
+    if (form.type === "salary") {
+      return {
+        ...period, description: "Diferença salarial", amountDue: form.amount,
+        amountPaid: "R$ 0,00", difference: form.amount, interest: interestLabel,
+      };
+    }
+    return {
+      ...period, description: `Correção monetária — ${form.index}`,
+      amount: form.amount, interest: interestLabel,
+    };
+  });
+}
+
+function parseBrazilianNumber(value) {
+  const normalized = String(value ?? "0").replace(/\./g, "").replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function IndexField({ form, update }) {
-  return <SelectField label="Indexador" value={form.index} onChange={(value) => update("index", value)} options={["IPCA-E (IBGE)", "IPCA (IBGE)", "INPC (IBGE)", "IGP-M (FGV)", "TR (Bacen)"]} />;
+  return <SelectField label="Indexador" value={form.index} onChange={(value) => update("index", value)} options={["IPCA-E (IBGE)", "IPCA (IBGE)", "INPC (IBGE)", "IGP-M (FGV)", "TR (Bacen)", "Taxa Selic (Bacen)"]} />;
 }
 
 function Field({ label, value, onChange = () => {}, icon: Icon }) {
