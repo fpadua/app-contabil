@@ -1,0 +1,50 @@
+generator client { provider = "prisma-client-js" }
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model EconomicIndex {
+  id          String               @id @default(uuid()) @db.Uuid
+  slug        String               @unique
+  name        String
+  source      String
+  periodicity String               @default("MONTHLY")
+  basis       Json?
+  active      Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  values      EconomicIndexValue[]
+}
+
+model EconomicIndexValue {
+  id                  String        @id @default(uuid()) @db.Uuid
+  economicIndexId     String        @db.Uuid
+  referenceDate       DateTime      @db.Date
+  monthlyValue        Decimal?      @db.Decimal(18, 10)
+  accumulatedValue    Decimal?      @db.Decimal(24, 12)
+  accumulatedPositive Decimal?      @db.Decimal(24, 12)
+  published           Boolean       @default(true)
+  sourceUrl            String?
+  rawData              Json?
+  importedAt           DateTime      @default(now())
+  economicIndex        EconomicIndex @relation(fields: [economicIndexId], references: [id])
+
+  @@unique([economicIndexId, referenceDate])
+  @@index([referenceDate])
+}
+
+model CalculationRule {
+  id          String   @id
+  name        String
+  description String
+  version     Int      @default(1)
+  sourceFile  String
+  sourceSheet String
+  sourceCells String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
