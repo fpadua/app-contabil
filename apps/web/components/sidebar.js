@@ -21,7 +21,7 @@ export function Sidebar() {
       <div className="brand"><span>Contábil</span><small>CÁLCULOS CONTÁBEIS E JUDICIAIS</small></div>
       <nav aria-label="Navegação principal">
         {navigation.map(({ label, icon: Icon, href }) => (
-          <Link className={`nav-item ${pathname === href ? "active" : ""}`} href={href} key={label}>
+          <Link className={`nav-item ${pathname === href || (href !== "/painel" && pathname.startsWith(`${href}/`)) ? "active" : ""}`} href={href} key={label}>
             <Icon size={20} strokeWidth={1.7} /><span>{label}</span>
           </Link>
         ))}

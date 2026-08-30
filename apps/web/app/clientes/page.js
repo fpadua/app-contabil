@@ -1,5 +1,9 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { AppShell } from "../../components/app-shell";
 import { ModulePage } from "../../components/module-page";
+import { readRecords, RECORD_KEYS } from "../../lib/local-records";
 
 const columns = [
   { key: "name", label: "Nome", width: "1.5fr" },
@@ -15,5 +19,8 @@ const rows = [
 ];
 
 export default function ClientsPage() {
-  return <AppShell><ModulePage eyebrow="CADASTROS" title="Clientes" description="Centralize clientes e consulte os processos vinculados." actionLabel="Novo cliente" columns={columns} rows={rows} stats={[{ label: "Clientes ativos", value: "27", hint: "+2 no mês" }, { label: "Com processos", value: "19", hint: "70% da base" }, { label: "Novos cadastros", value: "4", hint: "Últimos 30 dias" }]} /></AppShell>;
+  const [visibleRows, setVisibleRows] = useState(rows);
+  useEffect(() => setVisibleRows([...readRecords(RECORD_KEYS.clients), ...rows]), []);
+
+  return <AppShell><ModulePage eyebrow="CADASTROS" title="Clientes" description="Centralize clientes e consulte os processos vinculados." actionLabel="Novo cliente" actionHref="/clientes/novo" columns={columns} rows={visibleRows} stats={[{ label: "Clientes ativos", value: "27", hint: "+2 no mês" }, { label: "Com processos", value: "19", hint: "70% da base" }, { label: "Novos cadastros", value: "4", hint: "Últimos 30 dias" }]} /></AppShell>;
 }
