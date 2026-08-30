@@ -28,6 +28,14 @@ Para executar a API em outro terminal:
 npm run dev:api
 ```
 
+Para sincronizar índices, configure a chave oficial no `.env` e execute:
+
+```bash
+npm run sync:indices --workspace=@contabil/api
+```
+
+Consulte [docs/indices-economicos.md](docs/indices-economicos.md) para detalhes de carga histórica, auditoria e bloqueio por competências ausentes.
+
 ## Validação
 
 ```bash
