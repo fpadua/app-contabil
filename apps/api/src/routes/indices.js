@@ -54,10 +54,16 @@ export async function indexRoutes(app) {
     const parsed = syncRequestSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ code: "INVALID_SYNC_PERIOD", issues: parsed.error.issues });
     const env = getEnvironment();
-    const provider = createIndexProvider(env);
-    const service = new SyncEconomicIndicesService({ provider, repository, targetSlugs });
-    const result = await service.execute({ ...parsed.data, requestedBy: requestedBy(request) });
-    return reply.status(result.status === "FAILED" ? 502 : 200).send(result);
+    const task = startBackgroundTask({
+      type: "index-sync",
+      label: "Atualizar todos os índices",
+      worker: async (onProgress) => {
+        const provider = createIndexProvider(env);
+        const service = new SyncEconomicIndicesService({ provider, repository, targetSlugs });
+        return service.execute({ ...parsed.data, requestedBy: requestedBy(request), onProgress });
+      },
+    });
+    return reply.status(202).send({ taskId: task.id, status: task.status });
   });
 
   app.post("/import", async (request, reply) => {

@@ -17,6 +17,9 @@ export function createTask({ type, label }) {
     stage: null,
     message: "Aguardando início...",
     progress: 0,
+    current: null,
+    total: null,
+    currentName: null,
     result: null,
     error: null,
     createdAt: now,
@@ -41,6 +44,9 @@ export function updateTask(id, patch) {
   task.stage = patch.stage ?? task.stage;
   task.message = patch.message ?? task.message;
   if (typeof patch.progress === "number") task.progress = Math.max(0, Math.min(100, Math.round(patch.progress)));
+  if (Number.isInteger(patch.current)) task.current = patch.current;
+  if (Number.isInteger(patch.total)) task.total = patch.total;
+  if (patch.currentName !== undefined) task.currentName = patch.currentName;
   task.updatedAt = Date.now();
 }
 

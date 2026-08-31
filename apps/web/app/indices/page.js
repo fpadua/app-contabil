@@ -15,17 +15,11 @@ const columns = [
   { key: "source", label: "Fonte" }, { key: "origin", label: "Origem" }, { key: "status", label: "Situação" },
   { key: "actions", label: "", width: "max-content" },
 ];
-const demoRows = [
-  { id: 1, slug: "ipca", index: "IPCA", reference: "07/2026", monthly: "0,07%", accumulated: "—", source: "IBGE", origin: "Site", status: "Demonstração" },
-  { id: 2, slug: "inpc", index: "INPC", reference: "07/2026", monthly: "-0,01%", accumulated: "—", source: "IBGE", origin: "Site", status: "Demonstração" },
-  { id: 3, slug: "igp_m", index: "IGP-M", reference: "07/2026", monthly: "-1,16%", accumulated: "2,77%", source: "FGV", origin: "Site", status: "Demonstração" },
-  { id: 4, slug: "tr", index: "TR", reference: "08/2026", monthly: "0,1693%", accumulated: "—", source: "Bacen", origin: "Site", status: "Demonstração" },
-];
 
 export default function IndicesPage() {
   const queryClient = useQueryClient();
   const indices = useQuery({ queryKey: ["economic-indices"], queryFn: fetchIndices });
-  const sync = useMutation({ mutationFn: synchronizeIndices, onSuccess: () => queryClient.invalidateQueries({ queryKey: ["economic-indices"] }) });
+  const sync = useMutation({ mutationFn: synchronizeIndices, onSuccess: (data) => data?.taskId && trackTask(data.taskId, "index-sync") });
   const importIndex = useMutation({ mutationFn: importStart, onSuccess: (data) => data?.taskId && trackTask(data.taskId, "index-import") });
   const refreshIndex = useMutation({ mutationFn: refreshStart, onSuccess: (data) => data?.taskId && trackTask(data.taskId, "index-refresh") });
 
@@ -45,7 +39,7 @@ export default function IndicesPage() {
       try {
         const current = await fetchTask(task.taskId);
         if (cancelled) return;
-        const next = { ...task, progress: current.progress, message: current.message, status: current.status, result: current.result, error: current.error };
+        const next = { ...task, progress: current.progress, message: current.message, status: current.status, result: current.result, error: current.error, current: current.current, total: current.total, currentName: current.currentName };
         if (current.status === "SUCCEEDED" || current.status === "FAILED") {
           next.finished = true;
           queryClient.invalidateQueries({ queryKey: ["economic-indices"] });
@@ -66,17 +60,17 @@ export default function IndicesPage() {
     setTask({ taskId, type, status: "RUNNING", progress: 0, message: "Iniciando...", finished: false });
   }
 
-  const rows = indices.data?.length ? indices.data.map(mapIndex) : demoRows;
-  const isApi = indices.data?.length !== undefined && indices.data.length > 0;
+  const rows = indices.isLoading ? null : indices.data?.length ? indices.data.map(mapIndex) : [];
+
+  const pendingCount = indices.data ? indices.data.filter((item) => !item.values?.[0]?.published).length : null;
 
   const statusMessage = task?.finished
     ? task.status === "FAILED" ? (task.error ?? "A tarefa falhou.") : taskSummary(task)
     : importIndex.isError ? importIndex.error.message
     : refreshIndex.isError ? refreshIndex.error.message
-    : sync.isSuccess
-    ? `Sincronização ${sync.data.status.toLocaleLowerCase("pt-BR")}: ${sync.data.inserted} inclusões e ${sync.data.updated} atualizações.`
     : sync.isError ? sync.error.message
-    : indices.isError ? "API ou banco ainda não configurados. Exibindo dados demonstrativos." : null;
+    : indices.isError ? indices.error.message
+    : null;
 
   const taskBusy = Boolean(task && !task.finished);
   const statusError = taskBusy ? false : task?.finished ? task.status === "FAILED" : (importIndex.isError || refreshIndex.isError || sync.isError);
@@ -144,7 +138,7 @@ export default function IndicesPage() {
 
         {task && !task.finished && (
           <div className="task-progress" role="status">
-            <div className="task-progress-head"><strong>{task.type === "index-refresh" ? "Atualizando índice via site (Playwright)" : "Importando índice via PDF"}</strong><span>{task.progress}%</span></div>
+            <div className="task-progress-head"><strong>{taskProgressTitle(task)}</strong><span>{task.total ? `${task.current} de ${task.total} índices · ` : ""}{task.progress}%</span></div>
             <div className="progress-track" aria-hidden="true"><div className="progress-bar" style={{ width: `${task.progress}%` }} /></div>
             <p><Loader2 className="spinning" size={14} /> {task.message}</p>
             <small>Você pode continuar usando o sistema enquanto isso acontece.</small>
@@ -180,37 +174,38 @@ export default function IndicesPage() {
         {statusMessage && <div className={`module-status ${statusError ? "error" : ""}`} role="status">{statusMessage}</div>}
 
         <div className="stat-grid">
-          <article className="stat-card"><span>Índices ativos</span><strong>{String(indices.data?.length ?? 5)}</strong><small>{isApi ? "Séries monitoradas" : "Séries monitoradas (demonstração)"}</small></article>
-          <article className="stat-card"><span>Última verificação</span><strong>{indices.data ? "Agora" : "Demonstração"}</strong><small>Sincronização auditável</small></article>
-          <article className="stat-card"><span>Pendências</span><strong>{sync.data?.failed ? String(sync.data.failed) : "0"}</strong><small>Competências indisponíveis</small></article>
+          <article className="stat-card"><span>Índices ativos</span><strong>{indices.data ? String(indices.data.length) : "—"}</strong><small>Séries monitoradas</small></article>
+          <article className="stat-card"><span>Última verificação</span><strong>{indices.data ? "Agora" : "—"}</strong><small>Sincronização auditável</small></article>
+          <article className="stat-card"><span>Pendências</span><strong>{pendingCount === null ? "0" : String(pendingCount)}</strong><small>Competências não publicadas</small></article>
         </div>
 
         <div className="data-card">
           <div className="data-toolbar">
             <div className="search-field"><Search size={17} /><input aria-label="Buscar em Índices econômicos" onChange={(event) => setQuery(event.target.value)} placeholder="Buscar..." value={query} /></div>
-            <span>{rows.length} registro{rows.length === 1 ? "" : "s"}</span>
+            <span>{rows ? `${rows.length} registro${rows.length === 1 ? "" : "s"}` : "Carregando..."}</span>
           </div>
           <div className="table-scroll">
             <div className="data-table" role="table" style={{ "--columns": columns.map((column) => column.width ?? "1fr").join(" ") }}>
               <div className="data-row data-head" role="row">{columns.map((column) => <span key={column.key}>{column.label}</span>)}</div>
-              {rows.map((row) => (
+              {(rows ?? []).map((row, rowIndex) => (
                 <div className="data-row" key={row.id} role="row">
                   {columns.map((column) => {
                     if (column.key === "index") return <span key={column.key}><Link className="index-name-link" href={`/indices/${row.slug}`}>{row.index}</Link></span>;
-                    if (column.key === "actions") return <span className="row-actions" key={column.key}>{rowActions(row)}</span>;
+                    if (column.key === "actions") return <span className="row-actions" key={column.key}>{rowActions(row, rowIndex >= rows.length - 2)}</span>;
                     return <span className={column.key === "status" || column.key === "origin" ? `status-pill ${pillClass(row[column.key], column.key)}` : ""} key={column.key}>{row[column.key]}</span>;
                   })}
                 </div>
               ))}
             </div>
           </div>
-          {rows.length === 0 && <div className="empty-state"><Search size={28} /><strong>Nenhum registro encontrado</strong><span>Tente outro termo de busca.</span></div>}
+          {rows && rows.length === 0 && <div className="empty-state"><Search size={28} /><strong>Nenhum registro encontrado</strong><span>Nenhum índice econômico disponível ainda.</span></div>}
+          {!rows && <div className="empty-state"><Loader2 className="spinning" size={28} /><strong>Carregando índices...</strong><span>Consultando o banco de dados.</span></div>}
         </div>
       </section>
     </AppShell>
   );
 
-  function rowActions(row) {
+  function rowActions(row, opensUpward) {
     return (
       <div className="row-menu">
         <button
@@ -224,7 +219,7 @@ export default function IndicesPage() {
           <RefreshCw size={14} /> Atualizar <ChevronDown size={14} />
         </button>
         {activeMenu === row.id && (
-          <div className="row-menu-pop" role="menu">
+          <div className={`row-menu-pop${opensUpward ? " opens-upward" : ""}`} role="menu">
             <button onClick={() => handleRefreshSite(row)} role="menuitem" type="button"><RefreshCw size={15} /><span><strong>Atualizar via site</strong><small>Releitura da fonte pública (Playwright)</small></span></button>
             <button onClick={() => handleRefreshPdf(row)} role="menuitem" type="button"><FileText size={15} /><span><strong>Reimportar PDF</strong><small>Substituir pela versão de um PDF</small></span></button>
           </div>
@@ -267,9 +262,18 @@ async function fetchTask(taskId) {
   return response.json();
 }
 
+function taskProgressTitle(task) {
+  if (task.type === "index-sync") return "Atualizando todos os índices via site";
+  if (task.type === "index-refresh") return "Atualizando índice via site (Playwright)";
+  return "Importando índice via PDF";
+}
+
 function taskSummary(task) {
   const result = task.result;
   if (!result) return "Tarefa concluída.";
+  if (task.type === "index-sync") {
+    return `Sincronização concluída: ${result.inserted} inclusões e ${result.updated} atualizações${result.failed ? ` e ${result.failed} falhas` : ""}.`;
+  }
   const name = result.index?.name ?? (task.type === "index-import" ? "índice importado" : "índice");
   const kind = task.type === "index-refresh" ? "Atualização via site" : "Importação";
   return `${kind} concluída para ${name}: ${result.inserted} inclusões e ${result.updated} atualizações.`;

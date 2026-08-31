@@ -33,6 +33,7 @@
 .row-menu{position:relative}
 .row-update{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid #dcd8d1;border-radius:6px;background:#fbfaf7;color:#57534e;font-size:11px;font-weight:600}.row-update:hover{border-color:var(--terracotta);color:var(--terracotta-dark)}
 .row-menu-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:20;min-width:238px;padding:6px;display:grid;gap:2px;border:1px solid #e2dcd4;border-radius:9px;background:#fff;box-shadow:var(--shadow)}
+.row-menu-pop.opens-upward{top:auto;bottom:calc(100% + 6px)}
 .row-menu-pop button{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border:0;border-radius:7px;background:transparent;color:#4b4945;text-align:left}.row-menu-pop button:hover{background:#f6f2ec}
 .row-menu-pop button svg{flex:0 0 auto;color:var(--terracotta)}
 .row-menu-pop button span{display:grid;gap:2px}
