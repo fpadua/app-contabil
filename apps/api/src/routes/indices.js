@@ -7,7 +7,7 @@ import { createTask, setTaskRunning, updateTask, finishTask } from "../services/
 import { getEnvironment } from "../config/env.js";
 import { z } from "zod";
 
-const targetSlugs = ["ipca", "ipca_e", "inpc", "igp_m", "tr"];
+const targetSlugs = ["ipca", "ipca_e", "inpc", "igp_m", "igp_di", "incc_di", "ipc_fipe", "ipc_fgv", "ivar", "tr", "cdi", "btn_tr", "salario_minimo", "poupanca", "selic", "taxa_legal", "tbf", "tjlp", "ufesp", "ufir", "ufr", "upc", "ufm"];
 const syncRequestSchema = z.object({ from: z.string().regex(/^\d{4}-\d{2}$/).optional(), to: z.string().regex(/^\d{4}-\d{2}$/).optional() }).default({});
 
 function startBackgroundTask({ type, label, worker }) {

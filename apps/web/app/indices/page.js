@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, FileText, Loader2, RefreshCw, Search, UploadCloud, X } from "lucide-react";
 import { AppShell } from "../../components/app-shell";
+import { fetchTaskList } from "../../lib/tasks";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333";
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
@@ -31,6 +32,22 @@ export default function IndicesPage() {
   const [query, setQuery] = useState("");
   const [task, setTask] = useState(null);
   const inputRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function resumeActiveIndexTask() {
+      try {
+        const tasks = await fetchTaskList();
+        if (cancelled) return;
+        const active = (tasks ?? []).find((item) => (item.type === "index-sync" || item.type === "index-refresh" || item.type === "index-import") && (item.status === "RUNNING" || item.status === "QUEUED"));
+        if (active) setTask({ taskId: active.id, type: active.type, status: active.status, progress: active.progress ?? 0, message: active.message, current: active.current, total: active.total, currentName: active.currentName, finished: false });
+      } catch {
+        // sem acesso às tarefas; nada a retomar
+      }
+    }
+    if (!task) resumeActiveIndexTask();
+    return () => { cancelled = true; };
+  }, [task]);
 
   useEffect(() => {
     if (!task || task.finished) return;
