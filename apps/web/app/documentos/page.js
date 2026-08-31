@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../../components/app-shell";
 import { ModulePage } from "../../components/module-page";
-import { readRecords, RECORD_KEYS } from "../../lib/local-records";
+import { api, formatDate, formatRequired } from "../../lib/api";
 
 const columns = [
   { key: "name", label: "Documento", width: "1.7fr" },
@@ -12,15 +12,53 @@ const columns = [
   { key: "date", label: "Enviado em" },
   { key: "status", label: "Situação" },
 ];
-const rows = [
-  { id: 1, name: "Memória de cálculo — Processo 042.pdf", category: "Relatório", source: "Processo 042", date: "30/08/2026", status: "Validado" },
-  { id: 2, name: "Contrato habitacional.pdf", category: "Contrato", source: "Contrato 2021", date: "29/08/2026", status: "Em revisão" },
-  { id: 3, name: "Demonstrativo de parcelas.xlsx", category: "Planilha", source: "Financiamento SAC", date: "28/08/2026", status: "Validado" },
-];
 
 export default function DocumentsPage() {
-  const [visibleRows, setVisibleRows] = useState(rows);
-  useEffect(() => setVisibleRows([...readRecords(RECORD_KEYS.documents), ...rows]), []);
+  const query = useQuery({ queryKey: ["documents"], queryFn: () => api.get("/api/documents") });
+  const rows = (query.data ?? []).map(mapDocument);
+  const stats = documentStats(query.data ?? []);
 
-  return <AppShell><ModulePage eyebrow="ARQUIVOS" title="Documentos" description="Consulte documentos, planilhas e memórias vinculadas aos cálculos." actionLabel="Novo documento" actionHref="/documentos/novo" columns={columns} rows={visibleRows} stats={[{ label: "Documentos", value: "86", hint: "12 neste mês" }, { label: "Em revisão", value: "4", hint: "Aguardando conferência" }, { label: "Armazenamento", value: "1,8 GB", hint: "Uso demonstrativo" }]} /></AppShell>;
+  return (
+    <AppShell>
+      <ModulePage
+        eyebrow="ARQUIVOS"
+        title="Documentos"
+        description="Consulte documentos, planilhas e memórias vinculadas aos cálculos."
+        actionLabel="Novo documento"
+        actionHref="/documentos/novo"
+        columns={columns}
+        rows={rows}
+        statusMessage={loadMessage(query)}
+        stats={stats}
+      />
+    </AppShell>
+  );
+}
+
+function mapDocument(item) {
+  return {
+    id: item.id,
+    name: item.title,
+    category: formatRequired(item.category),
+    source: item.process?.title ?? formatRequired(item.source ?? "Sem vínculo"),
+    date: formatDate(item.createdAt),
+    status: item.status ?? "Em revisão",
+  };
+}
+
+function documentStats(documents) {
+  const total = documents.length;
+  const reviewing = documents.filter((document) => document.status === "Em revisão").length;
+  const validated = documents.filter((document) => document.status === "Validado").length;
+  return [
+    { label: "Documentos", value: String(total), hint: "Registrados" },
+    { label: "Em revisão", value: String(reviewing), hint: "Aguardando conferência" },
+    { label: "Validados", value: String(validated), hint: "Confirmados" },
+  ];
+}
+
+function loadMessage(query) {
+  if (query.isLoading) return "Carregando documentos...";
+  if (query.isError) return "Não foi possível carregar os documentos. Verifique se a API está em execução.";
+  return null;
 }

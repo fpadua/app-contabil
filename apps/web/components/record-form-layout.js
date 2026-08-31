@@ -15,7 +15,7 @@ export function RecordFormLayout({ eyebrow, title, description, backHref, summar
           <div className="record-summary-icon"><ShieldCheck size={22} /></div>
           <h2>{summaryTitle}</h2>
           <ul>{summaryItems.map((item) => <li key={item}><CheckCircle2 size={15} /><span>{item}</span></li>)}</ul>
-          <p>Os dados ficam disponíveis neste navegador para você continuar testando o sistema.</p>
+          <p>Os dados são persistidos no sistema e ficam disponíveis para consulta e cálculos em qualquer dispositivo.</p>
         </aside>
       </div>
     </section>

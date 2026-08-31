@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Download, Plus, RefreshCw, Search } from "lucide-react";
 
-export function ModulePage({ eyebrow, title, description, actionLabel, actionHref, columns, rows, stats = [], actionIcon = "plus", onAction, actionDisabled = false, statusMessage }) {
+export function ModulePage({ eyebrow, title, description, actionLabel, actionHref, columns, rows, stats = [], actionIcon = "plus", onAction, actionDisabled = false, statusMessage, rowHref }) {
   const [query, setQuery] = useState("");
   const filteredRows = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("pt-BR");
@@ -12,6 +12,7 @@ export function ModulePage({ eyebrow, title, description, actionLabel, actionHre
     return rows.filter((row) => Object.values(row).some((value) => String(value).toLocaleLowerCase("pt-BR").includes(normalized)));
   }, [query, rows]);
   const ActionIcon = actionIcon === "refresh" ? RefreshCw : actionIcon === "download" ? Download : Plus;
+  const renderRow = (row) => columns.map((column) => <span key={column.key} className={column.key === "status" ? `status-pill ${statusClass(row[column.key])}` : ""}>{row[column.key]}</span>);
 
   return (
     <section className="workspace module-workspace">
@@ -38,7 +39,11 @@ export function ModulePage({ eyebrow, title, description, actionLabel, actionHre
         <div className="table-scroll">
           <div className="data-table" role="table" style={{ "--columns": columns.map((column) => column.width ?? "1fr").join(" ") }}>
             <div className="data-row data-head" role="row">{columns.map((column) => <span key={column.key}>{column.label}</span>)}</div>
-            {filteredRows.map((row) => <div className="data-row" role="row" key={row.id}>{columns.map((column) => <span key={column.key} className={column.key === "status" ? `status-pill ${statusClass(row[column.key])}` : ""}>{row[column.key]}</span>)}</div>)}
+            {filteredRows.map((row) => rowHref ? (
+              <Link className="data-row clickable" href={rowHref(row)} key={row.id} role="row">{renderRow(row)}</Link>
+            ) : (
+              <div className="data-row" key={row.id} role="row">{renderRow(row)}</div>
+            ))}
           </div>
         </div>
         {filteredRows.length === 0 && <div className="empty-state"><Search size={28} /><strong>Nenhum registro encontrado</strong><span>Tente outro termo de busca.</span></div>}
@@ -50,6 +55,6 @@ export function ModulePage({ eyebrow, title, description, actionLabel, actionHre
 function statusClass(value) {
   const normalized = String(value).toLocaleLowerCase("pt-BR");
   if (normalized.includes("conclu") || normalized.includes("atualizado") || normalized.includes("validado") || normalized.includes("ativo")) return "success";
-  if (normalized.includes("pendente") || normalized.includes("andamento") || normalized.includes("revisão")) return "warning";
+  if (normalized.includes("rascunho") || normalized.includes("pendente") || normalized.includes("andamento") || normalized.includes("revisão")) return "warning";
   return "neutral";
 }

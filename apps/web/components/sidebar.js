@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BriefcaseBusiness, Calculator, CircleHelp, FileText, Home, Users } from "lucide-react";
+import { BarChart3, BriefcaseBusiness, Calculator, CircleHelp, FileText, Files, Home, Users } from "lucide-react";
 
 const navigation = [
   { label: "Painel", icon: Home, href: "/painel" },
   { label: "Novo cálculo", icon: Calculator, href: "/calculos/novo" },
+  { label: "Cálculos", icon: Files, href: "/calculos" },
   { label: "Processos", icon: BriefcaseBusiness, href: "/processos" },
   { label: "Índices", icon: BarChart3, href: "/indices" },
   { label: "Clientes", icon: Users, href: "/clientes" },
@@ -21,7 +22,7 @@ export function Sidebar() {
       <div className="brand"><span>Contábil</span><small>CÁLCULOS CONTÁBEIS E JUDICIAIS</small></div>
       <nav aria-label="Navegação principal">
         {navigation.map(({ label, icon: Icon, href }) => (
-          <Link className={`nav-item ${pathname === href || (href !== "/painel" && pathname.startsWith(`${href}/`)) ? "active" : ""}`} href={href} key={label}>
+          <Link className={`nav-item ${pathname === href || (href !== "/painel" && pathname.startsWith(`${href}/`) && !navigation.some((n) => n.href !== href && pathname === n.href)) ? "active" : ""}`} href={href} key={label}>
             <Icon size={20} strokeWidth={1.7} /><span>{label}</span>
           </Link>
         ))}

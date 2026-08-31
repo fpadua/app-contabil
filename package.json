@@ -8,6 +8,8 @@
     "dev:api": "npm run dev --workspace=@contabil/api",
     "build": "npm run build --workspace=@contabil/web",
     "test": "npm run test --workspaces --if-present",
+    "test:e2e": "node e2e/full-flow.js",
+    "test:e2e:clean": "node e2e/cleanup.js",
     "prisma:generate": "npm run prisma:generate --workspace=@contabil/database"
   },
   "engines": { "node": ">=20.9.0" }

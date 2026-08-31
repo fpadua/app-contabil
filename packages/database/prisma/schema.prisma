@@ -15,6 +15,7 @@ model EconomicIndex {
   source      String
   periodicity String                      @default("MONTHLY")
   basis       Json?
+  origin      String                      @default("SYNCED")
   active      Boolean                     @default(true)
   createdAt   DateTime                    @default(now())
   updatedAt   DateTime                    @updatedAt
@@ -94,4 +95,87 @@ model CalculationRule {
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Client {
+  id         String    @id @default(uuid()) @db.Uuid
+  personType String    @default("Pessoa física")
+  name       String
+  document   String?
+  email      String?
+  phone      String?
+  notes      String?
+  status     String    @default("Ativo")
+createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  processes   Process[]
+  calculations Calculation[]
+
+  @@index([name])
+}
+
+model Process {
+  id              String     @id @default(uuid()) @db.Uuid
+  clientId        String?    @db.Uuid
+  client          Client?    @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  title           String
+  number          String?
+  calculationType String     @default("Correção monetária")
+  status          String     @default("Em andamento")
+  court           String?
+  division        String?
+  notes           String?
+  documents       Document[]
+  calculations    Calculation[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([clientId])
+}
+
+model Calculation {
+  id                 String    @id @default(uuid()) @db.Uuid
+  title              String
+  calculationType    String    @default("Correção monetária")
+  clientId           String?   @db.Uuid
+  client             Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  processId          String?   @db.Uuid
+  process            Process?  @relation(fields: [processId], references: [id], onDelete: SetNull)
+  indexSlug          String?
+  startDate          DateTime  @db.Date
+  endDate            DateTime  @db.Date
+  principalInCents   Int
+  accumulatedFactor  Decimal?  @db.Decimal(20, 14)
+  correctedInCents   Int?
+  correctionInCents  Int?
+  traceabilityRuleId String    @default("REGRA-CM-001")
+  months             Json?
+  installments       Json?
+  params             Json?
+  status             String    @default("Concluído")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([clientId])
+  @@index([processId])
+  @@index([indexSlug])
+}
+
+model Document {
+  id          String    @id @default(uuid()) @db.Uuid
+  title       String
+  category    String
+  description String?
+  fileName    String?
+  fileSize    Int?
+  mimeType    String?
+  storageKey  String?
+  processId   String?   @db.Uuid
+  process     Process?  @relation(fields: [processId], references: [id], onDelete: SetNull)
+  source      String?
+  status      String    @default("Em revisão")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([processId])
 }

@@ -42,11 +42,13 @@ export class DebitPlaywrightProvider {
     }));
   }
 
-  async getSeries(slug, { from, to } = {}) {
+  async getSeries(slug, { from, to, onProgress } = {}) {
     const index = INDEX_CATALOG.find((item) => item.slug === slug);
     if (!index) throw new Error(`Índice não suportado pelo coletor público: ${slug}`);
+    const report = (progress, message) => onProgress?.({ progress, message });
 
     await this.#respectDelay();
+    report(5, "Abrindo navegador");
     const browser = await this.#getBrowser();
     const page = await browser.newPage({
       locale: "pt-BR",
@@ -55,20 +57,24 @@ export class DebitPlaywrightProvider {
     const sourceUrl = `${this.baseUrl}${index.path}`;
 
     try {
+      report(10, "Acessando a fonte pública...");
       const response = await page.goto(sourceUrl, { waitUntil: "domcontentloaded", timeout: this.navigationTimeoutMs });
       this.lastNavigationAt = Date.now();
       if (!response?.ok()) throw new Error(`A página pública respondeu com HTTP ${response?.status() ?? "desconhecido"}`);
+      report(35, "Página carregada");
 
       const pageText = await page.locator("body").innerText();
       if (BLOCK_PAGE_PATTERN.test(pageText)) {
         throw new Error("A página apresentou um bloqueio de acesso; a rotina não tenta contorná-lo");
       }
 
+      report(45, "Localizando tabela histórica");
       const historicalTable = await findTableByHeaders(page, ["Ano", "Jan", "Dez"]);
       if (!historicalTable) throw new Error("Tabela histórica não encontrada; o layout da página pode ter mudado");
 
       const expandButton = page.locator("#btnTabelaCompleta").first();
       if (await expandButton.isVisible().catch(() => false)) {
+        report(55, "Expandindo série completa");
         await expandButton.click();
         const tableHandle = await historicalTable.elementHandle();
         if (tableHandle) {
@@ -80,13 +86,16 @@ export class DebitPlaywrightProvider {
         }
       }
 
+      report(65, "Extraindo tabela");
       const historicalMatrix = await tableToMatrix(historicalTable);
       const recentTable = await findTableByHeaders(page, ["Data", "Variação", "Acumulado 12 meses"]);
       const recentMatrix = recentTable ? await tableToMatrix(recentTable) : [];
+      report(85, "Consolidando competências");
       const values = mergeRecentValues(parseHistoricalTable(historicalMatrix), parseRecentTable(recentMatrix), sourceUrl)
         .filter((item) => isWithinPeriod(item.referenceDate, from, to));
 
       if (!values.length) throw new Error(`Nenhuma competência encontrada para ${slug} no período solicitado`);
+      report(100, "Série coletada");
       return {
         basis: {
           monthlyValue: "percent",

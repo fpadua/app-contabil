@@ -1,31 +1,39 @@
 "use client";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "../../../components/app-shell";
 import { FormActions, FormSection, RecordFormLayout } from "../../../components/record-form-layout";
-import { RECORD_KEYS, saveRecord } from "../../../lib/local-records";
+import { api } from "../../../lib/api";
 
 export default function NewClientPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [personType, setPersonType] = useState("Pessoa física");
-  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
+  const create = useMutation({
+    mutationFn: (data) => api.post("/api/clients", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      router.push("/clientes");
+    },
+    onError: (error) => setFormError(error.message),
+  });
 
   function handleSubmit(event) {
     event.preventDefault();
-    setSubmitting(true);
+    setFormError("");
     const data = new FormData(event.currentTarget);
-    saveRecord(RECORD_KEYS.clients, {
-      id: `client-${Date.now()}`,
+    create.mutate({
+      personType,
       name: data.get("name"),
       document: data.get("document"),
-      processes: "0",
-      lastActivity: "Agora",
-      status: data.get("status"),
       email: data.get("email"),
       phone: data.get("phone"),
+      notes: data.get("notes"),
+      status: data.get("status"),
     });
-    router.push("/clientes");
   }
 
   return (
@@ -49,7 +57,8 @@ export default function NewClientPage() {
               <label className="field field-wide"><span>Observações</span><textarea name="notes" placeholder="Inclua informações adicionais, se necessário." rows="4" /></label>
             </div>
           </FormSection>
-          <FormActions cancelHref="/clientes" submitLabel="Salvar cliente" submitting={submitting} />
+          {formError && <p className="field-error" role="alert">{formError}</p>}
+          <FormActions cancelHref="/clientes" submitLabel="Salvar cliente" submitting={create.isPending} />
         </form>
       </RecordFormLayout>
     </AppShell>

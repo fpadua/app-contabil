@@ -1,18 +1,28 @@
 "use client";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, UploadCloud, X } from "lucide-react";
 import { AppShell } from "../../../components/app-shell";
 import { FormActions, FormSection, RecordFormLayout } from "../../../components/record-form-layout";
-import { RECORD_KEYS, saveRecord } from "../../../lib/local-records";
+import { api } from "../../../lib/api";
 
 export default function NewDocumentPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const inputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
+  const create = useMutation({
+    mutationFn: (data) => api.post("/api/documents", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+      router.push("/documentos");
+    },
+    onError: (creationError) => setFormError(creationError.message),
+  });
 
   function chooseFile(selectedFile) {
     setError("");
@@ -32,19 +42,18 @@ export default function NewDocumentPage() {
       inputRef.current?.focus();
       return;
     }
-    setSubmitting(true);
+    setFormError("");
     const data = new FormData(event.currentTarget);
-    saveRecord(RECORD_KEYS.documents, {
-      id: `document-${Date.now()}`,
-      name: data.get("title") || file.name,
+    create.mutate({
+      title: data.get("title") || file.name,
       category: data.get("category"),
-      source: data.get("source") || "Sem vínculo",
-      date: new Date().toLocaleDateString("pt-BR"),
-      status: "Em revisão",
+      description: data.get("description"),
       fileName: file.name,
       fileSize: file.size,
+      mimeType: file.type,
+      source: data.get("source") || null,
+      status: "Em revisão",
     });
-    router.push("/documentos");
   }
 
   return (
@@ -70,7 +79,8 @@ export default function NewDocumentPage() {
               <label className="field field-wide"><span>Descrição</span><textarea name="description" placeholder="Inclua observações sobre o conteúdo do arquivo." rows="4" /></label>
             </div>
           </FormSection>
-          <FormActions cancelHref="/documentos" submitLabel="Salvar documento" submitting={submitting} />
+          {formError && <p className="field-error" role="alert">{formError}</p>}
+          <FormActions cancelHref="/documentos" submitLabel="Salvar documento" submitting={create.isPending} />
         </form>
       </RecordFormLayout>
     </AppShell>

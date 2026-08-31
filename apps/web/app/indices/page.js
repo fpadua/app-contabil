@@ -1,33 +1,237 @@
 "use client";
 
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, FileText, Loader2, RefreshCw, Search, UploadCloud, X } from "lucide-react";
 import { AppShell } from "../../components/app-shell";
-import { ModulePage } from "../../components/module-page";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333";
+const MAX_PDF_BYTES = 10 * 1024 * 1024;
+
 const columns = [
-  { key: "index", label: "Índice", width: "1.1fr" }, { key: "reference", label: "Competência" },
+  { key: "index", label: "Índice", width: "1.2fr" }, { key: "reference", label: "Competência" },
   { key: "monthly", label: "Variação mensal" }, { key: "accumulated", label: "Acumulado" },
-  { key: "source", label: "Fonte" }, { key: "status", label: "Situação" },
+  { key: "source", label: "Fonte" }, { key: "origin", label: "Origem" }, { key: "status", label: "Situação" },
+  { key: "actions", label: "", width: "max-content" },
 ];
 const demoRows = [
-  { id: 1, index: "IPCA", reference: "07/2026", monthly: "0,07%", accumulated: "—", source: "IBGE", status: "Demonstração" },
-  { id: 2, index: "INPC", reference: "07/2026", monthly: "-0,01%", accumulated: "—", source: "IBGE", status: "Demonstração" },
-  { id: 3, index: "IGP-M", reference: "07/2026", monthly: "-1,16%", accumulated: "2,77%", source: "FGV", status: "Demonstração" },
-  { id: 4, index: "TR", reference: "08/2026", monthly: "0,1693%", accumulated: "—", source: "Bacen", status: "Demonstração" },
+  { id: 1, slug: "ipca", index: "IPCA", reference: "07/2026", monthly: "0,07%", accumulated: "—", source: "IBGE", origin: "Site", status: "Demonstração" },
+  { id: 2, slug: "inpc", index: "INPC", reference: "07/2026", monthly: "-0,01%", accumulated: "—", source: "IBGE", origin: "Site", status: "Demonstração" },
+  { id: 3, slug: "igp_m", index: "IGP-M", reference: "07/2026", monthly: "-1,16%", accumulated: "2,77%", source: "FGV", origin: "Site", status: "Demonstração" },
+  { id: 4, slug: "tr", index: "TR", reference: "08/2026", monthly: "0,1693%", accumulated: "—", source: "Bacen", origin: "Site", status: "Demonstração" },
 ];
 
 export default function IndicesPage() {
   const queryClient = useQueryClient();
   const indices = useQuery({ queryKey: ["economic-indices"], queryFn: fetchIndices });
   const sync = useMutation({ mutationFn: synchronizeIndices, onSuccess: () => queryClient.invalidateQueries({ queryKey: ["economic-indices"] }) });
+  const importIndex = useMutation({ mutationFn: importStart, onSuccess: (data) => data?.taskId && trackTask(data.taskId, "index-import") });
+  const refreshIndex = useMutation({ mutationFn: refreshStart, onSuccess: (data) => data?.taskId && trackTask(data.taskId, "index-refresh") });
+
+  const [importOpen, setImportOpen] = useState(false);
+  const [file, setFile] = useState(null);
+  const [fileError, setFileError] = useState("");
+  const [prefillSlug, setPrefillSlug] = useState(null);
+  const [activeMenu, setActiveMenu] = useState(null);
+  const [query, setQuery] = useState("");
+  const [task, setTask] = useState(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (!task || task.finished) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const current = await fetchTask(task.taskId);
+        if (cancelled) return;
+        const next = { ...task, progress: current.progress, message: current.message, status: current.status, result: current.result, error: current.error };
+        if (current.status === "SUCCEEDED" || current.status === "FAILED") {
+          next.finished = true;
+          queryClient.invalidateQueries({ queryKey: ["economic-indices"] });
+          setTask(next);
+        } else {
+          setTask(next);
+        }
+      } catch {
+        // falha transitória de rede; segue tentando
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1200);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [task?.taskId, task?.status, task?.finished]);
+
+  function trackTask(taskId, type) {
+    setTask({ taskId, type, status: "RUNNING", progress: 0, message: "Iniciando...", finished: false });
+  }
+
   const rows = indices.data?.length ? indices.data.map(mapIndex) : demoRows;
-  const statusMessage = sync.isSuccess
+  const isApi = indices.data?.length !== undefined && indices.data.length > 0;
+
+  const statusMessage = task?.finished
+    ? task.status === "FAILED" ? (task.error ?? "A tarefa falhou.") : taskSummary(task)
+    : importIndex.isError ? importIndex.error.message
+    : refreshIndex.isError ? refreshIndex.error.message
+    : sync.isSuccess
     ? `Sincronização ${sync.data.status.toLocaleLowerCase("pt-BR")}: ${sync.data.inserted} inclusões e ${sync.data.updated} atualizações.`
     : sync.isError ? sync.error.message
     : indices.isError ? "API ou banco ainda não configurados. Exibindo dados demonstrativos." : null;
 
-  return <AppShell><ModulePage eyebrow="BASE ECONÔMICA" title="Índices econômicos" description="Consulte competências, fontes e o estado das séries utilizadas nos cálculos." actionLabel={sync.isPending ? "Atualizando..." : "Atualizar índices"} actionIcon="refresh" actionDisabled={sync.isPending} onAction={() => sync.mutate()} statusMessage={statusMessage} columns={columns} rows={rows} stats={[{ label: "Índices ativos", value: String(indices.data?.length ?? 5), hint: "Séries monitoradas" }, { label: "Última verificação", value: indices.data ? "Agora" : "Demonstração", hint: "Sincronização auditável" }, { label: "Pendências", value: sync.data?.failed ? String(sync.data.failed) : "0", hint: "Competências indisponíveis" }]} /></AppShell>;
+  const taskBusy = Boolean(task && !task.finished);
+  const statusError = taskBusy ? false : task?.finished ? task.status === "FAILED" : (importIndex.isError || refreshIndex.isError || sync.isError);
+
+  function chooseFile(selectedFile) {
+    setFileError("");
+    if (!selectedFile) return;
+    if (!/^application\/pdf$|\.pdf$/i.test(selectedFile.type) && !/\.pdf$/i.test(selectedFile.name)) {
+      setFileError("Envie um arquivo PDF seguindo o modelo do selic.pdf.");
+      setFile(null);
+      return;
+    }
+    if (selectedFile.size > MAX_PDF_BYTES) {
+      setFileError("O arquivo deve ter no máximo 10 MB.");
+      setFile(null);
+      return;
+    }
+    setFile(selectedFile);
+  }
+
+  function handleImport(event) {
+    event.preventDefault();
+    setFileError("");
+    if (!file) {
+      setFileError("Selecione um arquivo PDF para importar.");
+      inputRef.current?.focus?.();
+      return;
+    }
+    const data = new FormData(event.currentTarget);
+    const form = new FormData();
+    form.append("file", file, file.name);
+    form.append("name", data.get("name") || "");
+    form.append("source", data.get("source") || "");
+    if (prefillSlug) form.append("slug", prefillSlug);
+    importIndex.mutate(form);
+  }
+
+  function openImportAsNew() {
+    setPrefillSlug(null);
+    setActiveMenu(null);
+    setImportOpen((open) => !open);
+  }
+
+  function handleRefreshSite(row) {
+    setActiveMenu(null);
+    refreshIndex.mutate(row.slug);
+  }
+
+  function handleRefreshPdf(row) {
+    setActiveMenu(null);
+    setPrefillSlug(row.slug);
+    setImportOpen(true);
+  }
+
+  return (
+    <AppShell>
+      <section className="workspace module-workspace">
+        <header className="module-header module-actions">
+          <div><span className="module-eyebrow">BASE ECONÔMICA</span><h1>Índices econômicos</h1><p>Consulte competências, fontes e o estado das séries utilizadas nos cálculos.</p></div>
+          <div className="top-actions">
+            <button className="secondary-button" disabled={taskBusy} onClick={openImportAsNew} type="button"><UploadCloud size={16} /> Importar PDF</button>
+            <button className="primary-button module-action" disabled={sync.isPending || taskBusy} onClick={() => sync.mutate()} type="button"><RefreshCw className={sync.isPending ? "spinning" : ""} size={17} /> {sync.isPending ? "Atualizando..." : "Atualizar índices"}</button>
+          </div>
+        </header>
+
+        {task && !task.finished && (
+          <div className="task-progress" role="status">
+            <div className="task-progress-head"><strong>{task.type === "index-refresh" ? "Atualizando índice via site (Playwright)" : "Importando índice via PDF"}</strong><span>{task.progress}%</span></div>
+            <div className="progress-track" aria-hidden="true"><div className="progress-bar" style={{ width: `${task.progress}%` }} /></div>
+            <p><Loader2 className="spinning" size={14} /> {task.message}</p>
+            <small>Você pode continuar usando o sistema enquanto isso acontece.</small>
+          </div>
+        )}
+
+        {importOpen && (
+          <form className="import-panel" onSubmit={handleImport}>
+            <div className="import-panel-head"><strong>{prefillSlug ? `Reimportar PDF para "${prefillSlug}"` : "Importar índice a partir de PDF"}</strong><span>As colunas são anos e as linhas, meses — conforme o selic.pdf.</span><button aria-label="Fechar" onClick={() => setImportOpen(false)} type="button"><X size={17} /></button></div>
+            <input accept=".pdf,application/pdf" className="sr-only" onChange={(event) => chooseFile(event.target.files?.[0])} ref={inputRef} type="file" />
+            <div className="import-panel-fields">
+              {!file ? (
+                <button className="upload-zone" onClick={() => inputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); chooseFile(event.dataTransfer.files?.[0]); }} type="button">
+                  <UploadCloud size={30} /><strong>Arraste o PDF ou clique para selecionar</strong><span>Arquivo de até 10 MB, no formato do selic.pdf</span>
+                </button>
+              ) : (
+                <div className="selected-file"><div><FileText size={22} /><span><strong>{file.name}</strong><small>{formatBytes(file.size)}</small></span></div><button aria-label="Remover arquivo" onClick={() => { setFile(null); if (inputRef.current) inputRef.current.value = ""; }} type="button"><X size={17} /></button></div>
+              )}
+              <div className="fields-grid compact">
+                <label className="field"><span>Nome do índice</span><input name="name" placeholder="Ex.: Selic" /></label>
+                <label className="field"><span>Fonte</span><input name="source" placeholder="Ex.: Bacen" /></label>
+              </div>
+            </div>
+            {fileError && <p className="field-error" role="alert">{fileError}</p>}
+            {importIndex.isError && <p className="field-error" role="alert">{importIndex.error.message}</p>}
+            <div className="import-actions">
+              <button className="back-button" onClick={() => setImportOpen(false)} type="button">Cancelar</button>
+              <button className="primary-button" disabled={importIndex.isPending || taskBusy} type="submit">{importIndex.isPending ? <><RefreshCw className="spinning" size={16} /> Importando...</> : (prefillSlug ? "Reimportar índice" : "Importar índice")}</button>
+            </div>
+          </form>
+        )}
+
+        {statusMessage && <div className={`module-status ${statusError ? "error" : ""}`} role="status">{statusMessage}</div>}
+
+        <div className="stat-grid">
+          <article className="stat-card"><span>Índices ativos</span><strong>{String(indices.data?.length ?? 5)}</strong><small>{isApi ? "Séries monitoradas" : "Séries monitoradas (demonstração)"}</small></article>
+          <article className="stat-card"><span>Última verificação</span><strong>{indices.data ? "Agora" : "Demonstração"}</strong><small>Sincronização auditável</small></article>
+          <article className="stat-card"><span>Pendências</span><strong>{sync.data?.failed ? String(sync.data.failed) : "0"}</strong><small>Competências indisponíveis</small></article>
+        </div>
+
+        <div className="data-card">
+          <div className="data-toolbar">
+            <div className="search-field"><Search size={17} /><input aria-label="Buscar em Índices econômicos" onChange={(event) => setQuery(event.target.value)} placeholder="Buscar..." value={query} /></div>
+            <span>{rows.length} registro{rows.length === 1 ? "" : "s"}</span>
+          </div>
+          <div className="table-scroll">
+            <div className="data-table" role="table" style={{ "--columns": columns.map((column) => column.width ?? "1fr").join(" ") }}>
+              <div className="data-row data-head" role="row">{columns.map((column) => <span key={column.key}>{column.label}</span>)}</div>
+              {rows.map((row) => (
+                <div className="data-row" key={row.id} role="row">
+                  {columns.map((column) => {
+                    if (column.key === "index") return <span key={column.key}><Link className="index-name-link" href={`/indices/${row.slug}`}>{row.index}</Link></span>;
+                    if (column.key === "actions") return <span className="row-actions" key={column.key}>{rowActions(row)}</span>;
+                    return <span className={column.key === "status" || column.key === "origin" ? `status-pill ${pillClass(row[column.key], column.key)}` : ""} key={column.key}>{row[column.key]}</span>;
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+          {rows.length === 0 && <div className="empty-state"><Search size={28} /><strong>Nenhum registro encontrado</strong><span>Tente outro termo de busca.</span></div>}
+        </div>
+      </section>
+    </AppShell>
+  );
+
+  function rowActions(row) {
+    return (
+      <div className="row-menu">
+        <button
+          aria-haspopup="menu"
+          aria-expanded={activeMenu === row.id}
+          className="row-update"
+          disabled={taskBusy}
+          onClick={() => setActiveMenu((current) => current === row.id ? null : row.id)}
+          type="button"
+        >
+          <RefreshCw size={14} /> Atualizar <ChevronDown size={14} />
+        </button>
+        {activeMenu === row.id && (
+          <div className="row-menu-pop" role="menu">
+            <button onClick={() => handleRefreshSite(row)} role="menuitem" type="button"><RefreshCw size={15} /><span><strong>Atualizar via site</strong><small>Releitura da fonte pública (Playwright)</small></span></button>
+            <button onClick={() => handleRefreshPdf(row)} role="menuitem" type="button"><FileText size={15} /><span><strong>Reimportar PDF</strong><small>Substituir pela versão de um PDF</small></span></button>
+          </div>
+        )}
+      </div>
+    );
+  }
 }
 
 async function fetchIndices() {
@@ -43,9 +247,47 @@ async function synchronizeIndices() {
   return payload;
 }
 
+async function refreshStart(slug) {
+  const response = await fetch(`${apiUrl}/api/indices/${slug}/refresh`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.message ?? payload?.errors?.join(" | ") ?? "Não foi possível iniciar a atualização do índice.");
+  return payload;
+}
+
+async function importStart(formData) {
+  const response = await fetch(`${apiUrl}/api/indices/import`, { method: "POST", body: formData });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.message ?? payload?.errors?.join(" | ") ?? "Não foi possível importar o índice.");
+  return payload;
+}
+
+async function fetchTask(taskId) {
+  const response = await fetch(`${apiUrl}/api/tasks/${taskId}`);
+  if (!response.ok) throw new Error("Não foi possível consultar o progresso da tarefa.");
+  return response.json();
+}
+
+function taskSummary(task) {
+  const result = task.result;
+  if (!result) return "Tarefa concluída.";
+  const name = result.index?.name ?? (task.type === "index-import" ? "índice importado" : "índice");
+  const kind = task.type === "index-refresh" ? "Atualização via site" : "Importação";
+  return `${kind} concluída para ${name}: ${result.inserted} inclusões e ${result.updated} atualizações.`;
+}
+
 function mapIndex(item) {
   const latest = item.values?.[0];
-  return { id: item.id, index: item.name, reference: latest ? formatPeriod(latest.referenceDate) : "Sem dados", monthly: formatDecimal(latest?.monthlyValue, "%"), accumulated: formatDecimal(latest?.accumulatedValue, "%"), source: item.source, status: latest?.published ? "Atualizado" : "Pendente" };
+  return {
+    id: item.id,
+    slug: item.slug,
+    index: item.name,
+    reference: latest ? formatPeriod(latest.referenceDate) : "Sem dados",
+    monthly: formatDecimal(latest?.monthlyValue, "%"),
+    accumulated: formatDecimal(latest?.accumulatedValue, "%"),
+    source: item.source,
+    origin: item.origin === "IMPORTED" ? "Importado" : "Site",
+    status: latest?.published ? "Atualizado" : "Pendente",
+  };
 }
 
 function formatPeriod(value) {
@@ -56,4 +298,17 @@ function formatPeriod(value) {
 function formatDecimal(value, suffix = "") {
   if (value === null || value === undefined) return "—";
   return `${Number(value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}${suffix}`;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
+}
+
+function pillClass(value, key) {
+  const normalized = String(value).toLocaleLowerCase("pt-BR");
+  if (key === "origin") return normalized === "importado" ? "success" : "neutral";
+  if (normalized.includes("conclu") || normalized.includes("atualizado") || normalized.includes("validado") || normalized.includes("ativo")) return "success";
+  if (normalized.includes("pendente") || normalized.includes("andamento") || normalized.includes("revisão")) return "warning";
+  return "neutral";
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "../../components/app-shell";
 import { ModulePage } from "../../components/module-page";
-import { readRecords, RECORD_KEYS } from "../../lib/local-records";
+import { api, formatDate, formatRequired } from "../../lib/api";
 
 const columns = [
   { key: "process", label: "Processo/contrato", width: "1.5fr" },
@@ -12,16 +12,55 @@ const columns = [
   { key: "updated", label: "Atualizado em", width: ".85fr" },
   { key: "status", label: "Situação", width: ".8fr" },
 ];
-const rows = [
-  { id: 1, process: "Processo 0001245-32.2025", client: "Cliente demonstrativo A", type: "Correção monetária", updated: "30/08/2026", status: "Em andamento" },
-  { id: 2, process: "Contrato habitacional 2021", client: "Cliente demonstrativo B", type: "Financiamento SAC", updated: "29/08/2026", status: "Em revisão" },
-  { id: 3, process: "Processo 0000871-19.2024", client: "Cliente demonstrativo C", type: "Diferença salarial", updated: "27/08/2026", status: "Concluído" },
-  { id: 4, process: "Acordo judicial 042", client: "Cliente demonstrativo D", type: "Cálculo judicial", updated: "25/08/2026", status: "Concluído" },
-];
 
 export default function ProcessesPage() {
-  const [visibleRows, setVisibleRows] = useState(rows);
-  useEffect(() => setVisibleRows([...readRecords(RECORD_KEYS.processes), ...rows]), []);
+  const query = useQuery({ queryKey: ["processes"], queryFn: () => api.get("/api/processes") });
+  const rows = (query.data ?? []).map(mapProcess);
+  const stats = processStats(query.data ?? []);
 
-  return <AppShell><ModulePage eyebrow="GESTÃO" title="Processos" description="Organize contratos, demandas e cálculos relacionados." actionLabel="Novo processo" actionHref="/processos/novo" columns={columns} rows={visibleRows} stats={[{ label: "Processos ativos", value: "18", hint: "+3 no mês" }, { label: "Em conferência", value: "5", hint: "2 prioritários" }, { label: "Concluídos", value: "64", hint: "Histórico completo" }]} /></AppShell>;
+  return (
+    <AppShell>
+      <ModulePage
+        eyebrow="GESTÃO"
+        title="Processos"
+        description="Organize contratos, demandas e cálculos relacionados."
+        actionLabel="Novo processo"
+        actionHref="/processos/novo"
+        columns={columns}
+        rows={rows}
+        rowHref={(row) => `/processos/${row.id}`}
+        statusMessage={loadMessage(query)}
+        stats={stats}
+      />
+    </AppShell>
+  );
+}
+
+function mapProcess(item) {
+  return {
+    id: item.id,
+    process: item.title || item.number,
+    client: item.client?.name ?? "—",
+    type: item.calculationType,
+    updated: formatDate(item.createdAt),
+    status: item.status ?? "Em andamento",
+  };
+}
+
+function processStats(processes) {
+  const total = processes.length;
+  const active = processes.filter((process) => process.status === "Em andamento").length;
+  const reviewing = processes.filter((process) => process.status === "Em revisão").length;
+  const finished = processes.filter((process) => process.status === "Concluído").length;
+  return [
+    { label: "Processos ativos", value: String(active), hint: `${total} no total` },
+    { label: "Em conferência", value: String(reviewing), hint: "Aguardando revisão" },
+    { label: "Concluídos", value: String(finished), hint: "Histórico" },
+  ];
+}
+
+function loadMessage(query) {
+  if (query.isLoading) return "Carregando processos...";
+  if (query.isError) return "Não foi possível carregar os processos. Verifique se a API está em execução.";
+  return null;
 }

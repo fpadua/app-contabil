@@ -18,7 +18,7 @@ export default function DashboardPage() {
       <Metric icon={BarChart3} label="Índices monitorados" value="5" detail="Todos atualizados" tone="green" />
     </div>
     <div className="dashboard-grid">
-      <section className="data-card"><div className="card-heading"><div><h2>Cálculos recentes</h2><p>Últimas movimentações registradas</p></div><Link href="/processos">Ver todos <ArrowRight size={15} /></Link></div>
+      <section className="data-card"><div className="card-heading"><div><h2>Cálculos recentes</h2><p>Últimas movimentações registradas</p></div><Link href="/calculos">Ver todos <ArrowRight size={15} /></Link></div>
         <div className="recent-list">{recentCalculations.map(([name,type,status,date]) => <article key={name}><div><strong>{name}</strong><span>{type}</span></div><span className={`status-pill ${status === "Concluído" ? "success" : "warning"}`}>{status}</span><time>{date}</time></article>)}</div>
       </section>
       <aside className="data-card index-summary"><div className="card-heading"><div><h2>Índices econômicos</h2><p>Competência mais recente</p></div></div>
