@@ -39,7 +39,7 @@ async function fetchIndices() {
 async function synchronizeIndices() {
   const response = await fetch(`${apiUrl}/api/indices/sync`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
   const payload = await response.json();
-  if (!response.ok) throw new Error(payload.message ?? "Não foi possível sincronizar os índices.");
+  if (!response.ok) throw new Error(payload.message ?? payload.errors?.join(" | ") ?? "Não foi possível sincronizar os índices.");
   return payload;
 }
 

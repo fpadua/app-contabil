@@ -3,12 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "node --watch src/server.js", "start": "node src/server.js", "test": "node --test", "sync:indices": "node src/jobs/sync-indices.js" },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test",
+    "sync:indices": "node src/jobs/sync-indices.js",
+    "playwright:install": "playwright install chromium"
+  },
   "dependencies": {
     "@contabil/calculation-engine": "*",
     "@contabil/database": "*",
     "@fastify/cors": "^11.1.0",
+    "dotenv": "^17.4.2",
     "fastify": "5.12.1",
+    "playwright": "^1.62.1",
     "zod": "^4.1.5"
   }
 }

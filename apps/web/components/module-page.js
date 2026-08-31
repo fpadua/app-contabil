@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Download, Plus, RefreshCw, Search } from "lucide-react";
 
-export function ModulePage({ eyebrow, title, description, actionLabel, columns, rows, stats = [], actionIcon = "plus", onAction, actionDisabled = false, statusMessage }) {
+export function ModulePage({ eyebrow, title, description, actionLabel, actionHref, columns, rows, stats = [], actionIcon = "plus", onAction, actionDisabled = false, statusMessage }) {
   const [query, setQuery] = useState("");
   const filteredRows = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("pt-BR");
@@ -16,7 +17,11 @@ export function ModulePage({ eyebrow, title, description, actionLabel, columns, 
     <section className="workspace module-workspace">
       <header className="module-header">
         <div><span className="module-eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>
-        <button className="primary-button module-action" disabled={actionDisabled} onClick={onAction} type="button"><ActionIcon className={actionDisabled ? "spinning" : ""} size={17} /> {actionLabel}</button>
+        {actionHref ? (
+          <Link className="primary-button module-action" href={actionHref}><ActionIcon size={17} /> {actionLabel}</Link>
+        ) : (
+          <button className="primary-button module-action" disabled={actionDisabled} onClick={onAction} type="button"><ActionIcon className={actionDisabled ? "spinning" : ""} size={17} /> {actionLabel}</button>
+        )}
       </header>
 
       {statusMessage && <div className="module-status" role="status">{statusMessage}</div>}
