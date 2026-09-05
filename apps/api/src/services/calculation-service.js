@@ -1,5 +1,8 @@
 import {
   accumulateSeriesFactors,
+  accumulateIndexFactors,
+  accumulateSpreadsheetIndexFactors,
+  INDEX_ACCUMULATION_METHODS,
   applyAccumulatedFactor,
   judicialTwoPhaseCorrection,
   priceIndexedSchedule,
@@ -184,13 +187,13 @@ async function enrichSalaryEntries(input, repository) {
   const correctionEnd = rules.correctionEndDate ?? input.endDate;
   const interestEnd = rules.savingsEndDate ?? "2021-12-08";
   const selicStart = rules.selicStartDate ?? "2021-12-09";
-  const selicRate = await accumulatedRate(repository, rules.selicIndex ?? ["selic", "selic_bacen"], selicStart, input.endDate);
+  const selicRate = await accumulatedRate(repository, rules.selicIndex ?? ["selic", "selic_bacen"], selicStart, input.endDate, rules.selicMethod ?? INDEX_ACCUMULATION_METHODS.SIMPLE_RATE_BACKWARD);
   return Promise.all(input.entries.map(async (entry) => {
     const startDate = competenceToDate(entry.competence);
     return {
       ...entry,
-      correctionFactor: await accumulatedFactor(repository, rules.correctionIndex ?? "ipca_e", laterDate(startDate, rules.correctionStartDate ?? startDate), correctionEnd),
-      interestRate: await accumulatedRate(repository, rules.savingsIndex ?? ["poupanca", "poupanca_bacen"], laterDate(startDate, rules.savingsStartDate ?? input.citationDate), interestEnd),
+      correctionFactor: await configuredIndexFactor(repository, rules.correctionIndex ?? "ipca_e", laterDate(startDate, rules.correctionStartDate ?? startDate), correctionEnd, rules.correctionMethod ?? INDEX_ACCUMULATION_METHODS.COMPOUND_BACKWARD),
+      interestRate: await accumulatedRate(repository, rules.savingsIndex ?? ["poupanca", "poupanca_bacen"], laterDate(startDate, rules.savingsStartDate ?? input.citationDate), interestEnd, rules.savingsMethod ?? INDEX_ACCUMULATION_METHODS.SIMPLE_RATE_BACKWARD),
       selicRate,
     };
   }));
@@ -210,8 +213,27 @@ async function accumulatedFactor(repository, slug, startDate, endDate) {
   throw lastError;
 }
 
-async function accumulatedRate(repository, slug, startDate, endDate) {
-  return (await accumulatedFactor(repository, slug, startDate, endDate)) - 1;
+async function configuredIndexFactor(repository, slug, startDate, endDate, method) {
+  if (startDate > endDate) return 1;
+  const stats = await loadMonthlyStats({ repository, slug, startDate, endDate });
+  return method === INDEX_ACCUMULATION_METHODS.COMPOUND_BACKWARD
+    ? accumulateSpreadsheetIndexFactors(stats).accumulatedFactor
+    : accumulateIndexFactors(stats, { method }).accumulatedFactor;
+}
+
+async function accumulatedRate(repository, slug, startDate, endDate, method = INDEX_ACCUMULATION_METHODS.COMPOUND_BACKWARD) {
+  if (startDate > endDate) return 0;
+  const aliases = Array.isArray(slug) ? slug : [slug];
+  let lastError;
+  for (const indexSlug of aliases) {
+    try {
+      const stats = await loadMonthlyStats({ repository, slug: indexSlug, startDate, endDate });
+      return accumulateIndexFactors(stats, { method }).accumulatedRate;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 function competenceToDate(competence) {

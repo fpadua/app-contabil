@@ -5,6 +5,8 @@ Esta matriz impede que uma fórmula seja implementada sem origem conhecida e sem
 | Regra | Planilha | Aba/células de referência | Comportamento observado | Implementação | Situação |
 |---|---|---|---|---|---|
 | REGRA-CM-001 | Base comum dos modelos | Colunas de fator/correção | Aplicar fator acumulado ao principal e arredondar em centavos | `packages/calculation-engine/src/index.js` | Fundação implementada |
+| REGRA-IND-001 | `FONTE-DIF-SALARIAL-001` | `Indice!E8:G367` | Acumular IPCA-E regressivamente, arredondando a variação mensal em 6 casas antes da soma | `packages/calculation-engine/src/index.js` + `apps/api/src/services/calculation-service.js` | Implementada e validada com valores da planilha |
+| REGRA-IND-CORE-001 | `FONTE-DIF-SALARIAL-001` | `Indice!E8:G367`, `JUROS!B:E`, `SELIC!B:E`, `INSS!B:C` | Selecionar composição regressiva, soma simples regressiva ou fator direto conforme a natureza da série | `packages/calculation-engine/src/index.js` | Implementada e validada por estratégia |
 | REGRA-SAC-001 | `FONTE-SAC-IPCA-001` | `SAC 163 mil!D13`, colunas C:J | Amortização constante, juros sobre saldo e correção mensal | `packages/calculation-engine/src/amortization.js` + `apps/api/src/services/calculation-service.js` | Núcleo implementado, pendente comparação com planilha |
 | REGRA-SAC-002 | `FONTE-SAC-TR-001` | `Plan1!H11`, colunas C:Q | SAC corrigido pela TR | `packages/calculation-engine/src/index.js` (reuso do SAC com série TR) | Núcleo implementado, pendente comparação com planilha |
 | REGRA-PRICE-001 | `FONTE-PRICE-IGPM-001` | `Plan1`, colunas C:P | Price com correção por IGP-M | `packages/calculation-engine/src/amortization.js` + `apps/api/src/services/calculation-service.js` | Núcleo implementado, pendente comparação com planilha |
