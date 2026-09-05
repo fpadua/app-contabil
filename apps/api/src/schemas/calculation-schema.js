@@ -41,15 +41,35 @@ const scheduleInputSchema = z.object({
 export const sacSchema = scheduleInputSchema;
 export const priceSchema = scheduleInputSchema;
 
+const salaryEntrySchema = z.object({
+  referenceDate: z.iso.date().optional(),
+  competence: z.string().min(1),
+  description: z.string().min(1).optional(),
+  dueInCents: z.number().positive(),
+  receivedInCents: z.number().nonnegative(),
+  correctionFactor: z.number().positive().optional(),
+  interestRate: z.number().nonnegative().optional(),
+  selicRate: z.number().nonnegative().optional(),
+});
+const salaryRulesSchema = z.object({
+  correctionIndex: z.string().min(1).optional(), correctionStartDate: z.iso.date().optional(), correctionEndDate: z.iso.date().optional(),
+  savingsIndex: z.string().min(1).optional(), savingsStartDate: z.iso.date().optional(), savingsEndDate: z.iso.date().optional(),
+  selicIndex: z.string().min(1).optional(), selicStartDate: z.iso.date().optional(),
+  periods: z.array(z.object({ indexSlug: z.string().min(1), startDate: z.iso.date(), endDate: z.iso.date() })).max(10).optional(),
+});
+
 export const salaryDifferenceSchema = z.object({
   salaryPreviousInCents: z.number().int().positive(),
-  salaryNewInCents: z.number().int().positive(),
+  salaryNewInCents: z.number().int().positive().optional(),
   decimoTerceiro: z.boolean().default(true),
   vacationsWithBonus: z.boolean().default(true),
   indexSlug: optionalIndexSlug,
   startDate: z.iso.date(),
   endDate: z.iso.date(),
-}).refine((data) => data.salaryNewInCents > data.salaryPreviousInCents, { message: "O salário novo deve ser maior que o anterior para haver diferença." });
+  citationDate: z.iso.date().optional(),
+  rules: salaryRulesSchema.optional(),
+  entries: z.array(salaryEntrySchema).min(1).max(240).optional(),
+}).refine((data) => data.entries?.length || (data.salaryNewInCents && data.salaryNewInCents > data.salaryPreviousInCents), { message: "O salário novo deve ser maior que o anterior para haver diferença." });
 
 export const judicialCorrectionSchema = z.object({
   principalInCents: z.number().int().positive(),
@@ -109,15 +129,28 @@ const scheduleResultSchema = z.object({
   installments: z.array(installmentSchema),
 });
 
+const detailedSalaryMonthSchema = z.object({
+  referenceDate: z.string().nullable().optional(),
+  competence: z.string().min(1),
+  description: z.string().min(1),
+  dueInCents: z.number().positive(),
+  receivedInCents: z.number().nonnegative(),
+  differenceInCents: z.number().positive(),
+  correctionFactor: z.number().positive(),
+  correctedInCents: z.number().positive(),
+  interestRate: z.number().nonnegative(),
+  interestInCents: z.number().nonnegative(),
+  selicRate: z.number().nonnegative(),
+  selicInCents: z.number().nonnegative(),
+  totalInCents: z.number().positive(),
+}).passthrough();
+
 const salaryResultSchema = z.object({
   type: z.literal("salary"),
   ...resultBaseSchema,
   indexSlug: z.string().min(1),
-  months: z.preprocess((value) => value ?? undefined, z.array(calculationMonthSchema).optional()),
-  params: z.object({
-    reflections: z.object({ decimoTerceiro: z.boolean(), vacationsWithBonus: z.boolean() }),
-    monthlyDifferenceInCents: z.number().int().positive(),
-  }),
+  months: z.preprocess((value) => value ?? undefined, z.array(z.union([calculationMonthSchema, detailedSalaryMonthSchema])).optional()),
+  params: z.object({ calculationMode: z.enum(["simplified", "detailed"]) }).passthrough(),
 });
 
 const judicialResultSchema = z.object({
@@ -162,6 +195,7 @@ export const saveCalculationSchema = z.object({
   startDate: z.iso.date().optional(),
   endDate: z.iso.date().optional(),
   principalInCents: z.number().int().positive().optional(),
+  draftForm: z.unknown().optional(),
   result: legacyMonetaryResult.optional(),
 }).refine((data) => data.result || (data.startDate && data.endDate && data.principalInCents), {
   message: "Informe o resultado do cálculo ou os dados de um rascunho (datas e valor).",

@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { ArrowLeft, FileDown, Link2, Loader2, Pencil, Table2, X } from "lucide-react";
+import { ArrowLeft, FileDown, Link2, Loader2, Pencil, Table2, Trash2, X } from "lucide-react";
 import { AppShell } from "../../../components/app-shell";
 import { CalculationMemoryTable } from "../../../components/calculation-memory-table";
 import { CalculationAmortizationTable } from "../../../components/calculation-amortization-table";
@@ -13,6 +13,7 @@ import { indexLabel, downloadCalculationCsv, downloadCalculationPdf } from "../.
 
 export default function CalculationDetailPage() {
   const { id } = useParams();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const query = useQuery({ queryKey: ["calculation", id], queryFn: () => api.get(`/api/calculations/${id}`), enabled: Boolean(id) });
   const clients = useQuery({ queryKey: ["client-options"], queryFn: () => api.get("/api/clients/options"), enabled: true });
@@ -28,6 +29,7 @@ export default function CalculationDetailPage() {
   const [linkForm, setLinkForm] = useState({ clientId: calculation?.clientId ?? "", processId: calculation?.processId ?? "" });
   const [linkMessage, setLinkMessage] = useState(null);
   const [linkError, setLinkError] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
 
   const updateLink = useMutation({
     mutationFn: (data) => api.put(`/api/calculations/${id}`, data),
@@ -43,6 +45,16 @@ export default function CalculationDetailPage() {
     onError: (error) => setLinkError(error.message),
   });
 
+  const removeCalculation = useMutation({
+    mutationFn: () => api.delete(`/api/calculations/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calculations"] });
+      queryClient.removeQueries({ queryKey: ["calculation", id] });
+      router.push("/calculos");
+    },
+    onError: (error) => setDeleteError(error.message),
+  });
+
   function openLinkEditor() {
     setLinkForm({ clientId: calculation?.clientId ?? "", processId: calculation?.processId ?? "" });
     setLinkError(null);
@@ -53,6 +65,12 @@ export default function CalculationDetailPage() {
     event.preventDefault();
     setLinkError(null);
     updateLink.mutate({ clientId: linkForm.clientId || null, processId: linkForm.processId || null });
+  }
+
+  function confirmRemoval() {
+    if (!window.confirm(`Excluir ${isDraft ? "este rascunho" : "este cálculo"}? Esta ação não pode ser desfeita.`)) return;
+    setDeleteError(null);
+    removeCalculation.mutate();
   }
 
   const visibleProcesses = (processes.data ?? []).filter((process) => !linkForm.clientId || process.clientId === linkForm.clientId);
@@ -82,6 +100,7 @@ export default function CalculationDetailPage() {
         <Link className="record-back" href="/calculos"><ArrowLeft size={16} /> Voltar para cálculos</Link>
 
         {loadMessage(query) && <div className="module-status" role="status">{loadMessage(query)}</div>}
+        {deleteError && <div className="module-status error" role="alert">Nao foi possivel excluir: {deleteError}</div>}
         {exportError && <div className="module-status error" role="alert">Não foi possível exportar: {exportError}</div>}
         {isDraft && <div className="module-status" role="status">Rascunho salvo sem resultado. Conclua o cálculo para gerar memória e exportações.</div>}
 
@@ -89,6 +108,8 @@ export default function CalculationDetailPage() {
           <header className="module-header">
             <div><span className="module-eyebrow">{calculation.calculationType}</span><h1>{calculation.title}</h1><p>{periodText(calculation)}</p></div>
             <div className="top-actions module-actions">
+              {isDraft && <Link className="primary-button" href={`/calculos/novo?rascunho=${id}`}><Pencil size={16} /> Editar e recalcular</Link>}
+              <button className="secondary-button rule-remove" type="button" disabled={removeCalculation.isPending} onClick={confirmRemoval}>{removeCalculation.isPending ? <Loader2 className="spinning" size={16} /> : <Trash2 size={16} />} {removeCalculation.isPending ? "Excluindo..." : "Excluir"}</button>
               {!isDraft && <>
                 <button className="secondary-button" type="button" disabled={exportBusy !== null} onClick={handleDownloadCsv}><Table2 size={16} /> Planilha</button>
                 <button className="secondary-button" type="button" disabled={exportBusy !== null} onClick={handleDownloadPdf}>{exportBusy === "pdf" ? <Loader2 className="spinning" size={16} /> : <FileDown size={16} />} PDF</button>

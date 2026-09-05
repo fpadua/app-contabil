@@ -1,9 +1,9 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Bookmark, Building2, CalendarDays, Calculator, ChartNoAxesColumnIncreasing, Check, Download, FileUp, Info, Landmark, Link2, Loader2, Scale, Trash2, Users, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, ArrowRight, Bookmark, Building2, CalendarDays, Calculator, ChartNoAxesColumnIncreasing, Check, Copy, Download, FileUp, GripVertical, Info, Landmark, Link2, Loader2, Plus, Scale, Trash2, Users, X } from "lucide-react";
 import { Stepper } from "./stepper";
 import { SummaryCard } from "./summary-card";
 import { CalculationMemoryTable } from "./calculation-memory-table";
@@ -25,7 +25,8 @@ const indexSlugs = {
   "INPC (IBGE)": "inpc",
   "IGP-M (FGV)": "igp_m",
   "TR (Bacen)": "tr",
-  "Taxa Selic (Bacen)": "selic",
+  "Poupança (Bacen)": "poupanca",
+  "Taxa Selic (Bacen)": "selic_bacen",
 };
 
 const recentRange = (() => {
@@ -44,11 +45,13 @@ const initialForm = {
   startDate: recentRange.startDate, endDate: recentRange.endDate, index: "IPCA-E (IBGE)",
   interest: "0,00", interestType: "Simples", indexLag: "Sem defasagem", clientId: "", processId: "",
   months: "12", salaryPrevious: "R$ 3.000,00", salaryNew: "R$ 3.300,00", decimoTerceiro: true, vacationsWithBonus: true,
-  selicFactor: "0,5", ruleChanges: [],
+  selicFactor: "0,5", ruleChanges: [], salaryEntries: [], citationDate: "", salaryRules: { correctionIndex: "IPCA-E (IBGE)", correctionStartDate: "", correctionEndDate: "", savingsIndex: "Poupança (Bacen)", savingsStartDate: "", savingsEndDate: "08/12/2021", selicIndex: "Taxa Selic (Bacen)", selicStartDate: "09/12/2021" },
 };
 
 export function CalculationWizard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const draftId = searchParams.get("rascunho");
   const [step, setStep] = useState(1);
   const [form, setForm] = useState(initialForm);
   const [result, setResult] = useState(null);
@@ -57,6 +60,8 @@ export function CalculationWizard() {
   const [draftSaved, setDraftSaved] = useState(false);
   const [draftError, setDraftError] = useState(null);
   const fileInputRef = useRef(null);
+  const loadedDraftId = useRef(null);
+  const draft = useQuery({ queryKey: ["calculation-draft", draftId], queryFn: () => api.get(`/api/calculations/${draftId}`), enabled: Boolean(draftId) });
   const selectedType = calculationTypes.find((item) => item.id === form.type);
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
   const selectType = (type) => setForm((current) => ({ ...current, type: type.id, typeLabel: type.label }));
@@ -74,8 +79,19 @@ export function CalculationWizard() {
 
   const saveDraft = useMutation({
     mutationFn: (payload) => api.post("/api/calculations", payload),
-    onSuccess: () => setDraftSaved(true),
+    onSuccess: (data) => {
+      setDraftSaved(true);
+      router.replace(`/calculos/${data.id}`);
+    },
   });
+
+  useEffect(() => {
+    if (!draft.data || draft.data.status !== "Rascunho" || loadedDraftId.current === draft.data.id) return;
+    setForm(restoreDraftForm(draft.data));
+    setResult(null);
+    setStep(2);
+    loadedDraftId.current = draft.data.id;
+  }, [draft.data]);
 
   function openResultStep() {
     setStep(4);
@@ -149,6 +165,8 @@ export function CalculationWizard() {
         </div>
       </header>
       {draftError && <div className="module-status error" role="alert">{draftError}</div>}
+      {draft.isError && <div className="module-status error" role="alert">NÃ£o foi possÃ­vel abrir este rascunho para ediÃ§Ã£o.</div>}
+      {draft.data?.status === "Rascunho" && !draft.data?.params?.draftForm && <div className="module-status" role="status">Este rascunho foi salvo antes do armazenamento de lanÃ§amentos e regras. Os dados detalhados nÃ£o podem ser recuperados porque nÃ£o foram gravados no registro.</div>}
       <Stepper currentStep={step} />
       <div className="content-grid">
         <div className="form-panel">
@@ -190,8 +208,7 @@ function TypeStep({ form, update, selectType }) {
 function BasicFields({ form, update }) {
   if (form.type === "salary") {
     return <div className="section-block"><h2>Dados básicos do cálculo</h2><div className="fields-grid">
-      <MoneyField label="Salário anterior" value={form.salaryPrevious} onChange={(value) => update("salaryPrevious", value)} />
-      <MoneyField label="Salário novo" value={form.salaryNew} onChange={(value) => update("salaryNew", value)} />
+      <MoneyField label="Salário recebido base" value={form.salaryPrevious} onChange={(value) => update("salaryPrevious", value)} />
       <IndexField form={form} update={update} />
     </div></div>;
   }
@@ -217,7 +234,7 @@ function DataStep({ form, update, selectedType, importStatus, importError, onFil
   return <div className="step-content">
     <div className="eyebrow">{selectedType.label}</div><h2>Informe os dados do cálculo</h2>
     <p className="section-description">Os campos foram adaptados ao modelo escolhido. Nesta etapa, os dados ainda podem ser importados de uma planilha.</p>
-    <div className="fields-grid">
+    <div className={`fields-grid ${form.type === "salary" ? "salary-data-fields" : ""}`}>
       {form.type === "monetary" && <>
         <MoneyField label="Valor principal" value={form.amount} onChange={(value) => update("amount", value)} />
         <Field label="Identificação do contrato ou processo" value={form.title} onChange={(value) => update("title", value)} />
@@ -233,8 +250,7 @@ function DataStep({ form, update, selectedType, importStatus, importError, onFil
         <Field icon={CalendarDays} label="Atualizar até" value={form.endDate} onChange={(value) => update("endDate", value)} />
       </>}
       {form.type === "salary" && <>
-        <MoneyField label="Salário anterior" value={form.salaryPrevious} onChange={(value) => update("salaryPrevious", value)} />
-        <MoneyField label="Salário novo" value={form.salaryNew} onChange={(value) => update("salaryNew", value)} />
+        <MoneyField label="Salário recebido base" value={form.salaryPrevious} onChange={(value) => update("salaryPrevious", value)} />
         <IndexField form={form} update={update} />
         <Field label="Identificação do contrato ou processo" value={form.title} onChange={(value) => update("title", value)} />
         <Field icon={CalendarDays} label="Data de origem" value={form.startDate} onChange={(value) => update("startDate", value)} />
@@ -248,10 +264,7 @@ function DataStep({ form, update, selectedType, importStatus, importError, onFil
         <Field icon={CalendarDays} label="Atualizar até" value={form.endDate} onChange={(value) => update("endDate", value)} />
       </>}
     </div>
-    {form.type === "salary" && <div className="reflections">
-      <label><input type="checkbox" checked={form.decimoTerceiro} onChange={(event) => update("decimoTerceiro", event.target.checked)} /> Incluir reflexo de 13º salário</label>
-      <label><input type="checkbox" checked={form.vacationsWithBonus} onChange={(event) => update("vacationsWithBonus", event.target.checked)} /> Incluir reflexo de férias + 1/3</label>
-    </div>}
+    {form.type === "salary" && <SalaryEntriesEditor entries={form.salaryEntries} salaryReceived={form.salaryPrevious} citationDate={form.citationDate} onCitationDateChange={(value) => update("citationDate", value)} onChange={(entries) => update("salaryEntries", entries)} />}
     <div className="section-block vinculacao"><h2>Vincular a cliente e processo <Link2 size={15} /></h2>
       <div className="fields-grid compact">
         <OptionSelectField label="Cliente" value={form.clientId} onChange={handleClientChange} options={clientOptions} placeholder={clients.isLoading ? "Carregando clientes..." : "Sem vínculo"} disabled={clients.isLoading} />
@@ -268,13 +281,14 @@ function DataStep({ form, update, selectedType, importStatus, importError, onFil
 }
 
 function RulesStep({ form, update }) {
+  if (form.type === "salary" && form.salaryEntries.length > 0) return <SalaryRulesEditor form={form} update={update} />;
   if (form.type !== "monetary") {
     const summary = ruleSummary(form);
     return <div className="step-content"><h2>Regras que serão aplicadas</h2>
       <p className="section-description">Cada regra recebe um identificador e fica ligada à fórmula e ao teste que a valida (ver matriz de rastreabilidade).</p>
       <div className="rule-card"><div className="rule-number">R</div><div className="rule-body">
         <strong>{summary.title}</strong><span>{summary.description}</span>
-        {form.type === "salary" && <span className="rule-tag">{form.decimoTerceiro ? "13º salário" : ""}{form.decimoTerceiro && form.vacationsWithBonus ? " + " : ""}{form.vacationsWithBonus ? "férias + 1/3" : ""}</span>}
+        {form.type === "salary" && form.salaryEntries.length > 0 && <span className="rule-tag">IPCA-E automático · Poupança até 08/12/2021 · Selic a partir de 09/12/2021</span>}
         <span className="rule-tag">{summary.ruleIds}</span>
       </div></div>
       <p className="section-description"><Info size={14} /> O índice selecionado no passo anterior é consultado a partir da série oficial mensal; períodos sem cobertura interrompem o cálculo com mensagem clara.</p>
@@ -329,12 +343,38 @@ function ruleSummary(form) {
     case "price":
       return { title: "Sistema Francês de Amortização (PRICE)", ruleIds: "REGRA-PRICE-001", description: "Prestação constante composta de juros e capital, com a parcela de capital crescendo a cada mês." };
     case "salary":
-      return { title: "Diferença salarial com reflexos", ruleIds: "REGRA-DIF-001", description: "Diferença entre o novo e o anterior vencimento corrigida mês a mês pelo índice, com reflexos de 13º salário e férias + 1/3." };
+      return form.salaryEntries.length > 0
+        ? { title: "Diferença salarial detalhada", ruleIds: "REGRA-DIF-002", description: "Os lançamentos definem as diferenças; IPCA-E, poupança e Selic são consultados automaticamente nas séries cadastradas." }
+        : { title: "Diferença salarial com reflexos", ruleIds: "REGRA-DIF-001", description: "Diferença entre o novo e o anterior vencimento corrigida mês a mês pelo índice, com reflexos de 13º salário e férias + 1/3." };
     case "judicial":
       return { title: "Correção judicial (IPCA-E + Selic)", ruleIds: "REGRA-JUD-001", description: "Fase 1 com atualização pelo IPCA-E mensal e fase Selic aplicada ao fator acumulado informado a partir de 09/12/2021." };
     default:
       return { title: form.typeLabel, ruleIds: "—", description: "" };
   }
+}
+
+function SalaryRulesEditor({ form, update }) {
+  const rules = form.salaryRules;
+  const change = (field, value) => update("salaryRules", { ...rules, [field]: value });
+  const indexOptions = ["IPCA-E (IBGE)", "IPCA (IBGE)", "INPC (IBGE)", "IGP-M (FGV)", "TR (Bacen)", "Poupança (Bacen)", "Taxa Selic (Bacen)"];
+  return <div className="step-content salary-rules-step"><h2>Configure as regras do cálculo</h2><p className="section-description">Essas escolhas são aplicadas à memória detalhada. Períodos sem cobertura nas séries cadastradas impedem o cálculo.</p>
+    <div className="rule-card"><div className="rule-number">1</div><div className="rule-body"><strong>Correção monetária</strong><div className="salary-rule-fields"><SelectField label="Índice" value={rules.correctionIndex} onChange={(value) => change("correctionIndex", value)} options={indexOptions} /><IndexCompetenceField label="Competência inicial" indexLabel={rules.correctionIndex} value={rules.correctionStartDate || form.startDate} onChange={(value) => change("correctionStartDate", value)} /><IndexCompetenceField label="Competência final" indexLabel={rules.correctionIndex} value={rules.correctionEndDate || form.endDate} onChange={(value) => change("correctionEndDate", value)} /></div></div></div>
+    <div className="rule-card"><div className="rule-number">2</div><div className="rule-body"><strong>Juros de poupança</strong><div className="salary-rule-fields"><SelectField label="Índice" value={rules.savingsIndex} onChange={(value) => change("savingsIndex", value)} options={indexOptions} /><IndexCompetenceField label="Competência inicial" indexLabel={rules.savingsIndex} value={rules.savingsStartDate || form.citationDate} onChange={(value) => change("savingsStartDate", value)} /><IndexCompetenceField label="Competência final" indexLabel={rules.savingsIndex} value={rules.savingsEndDate} onChange={(value) => change("savingsEndDate", value)} /></div></div></div>
+    <div className="rule-card"><div className="rule-number">3</div><div className="rule-body"><strong>Selic</strong><div className="salary-rule-fields"><SelectField label="Índice" value={rules.selicIndex} onChange={(value) => change("selicIndex", value)} options={indexOptions} /><IndexCompetenceField label="Competência inicial" indexLabel={rules.selicIndex} value={rules.selicStartDate} onChange={(value) => change("selicStartDate", value)} /></div></div></div>
+    <p className="section-description"><Info size={14} /> Para uma nova regra por período, adicione um novo cálculo para o período correspondente; a segmentação de índices dentro desta memória será adicionada na próxima evolução.</p>
+  </div>;
+}
+
+function buildSalaryRules(rules, startDate, endDate) {
+  const map = (label) => indexSlugs[label] ?? null;
+  const date = (value, fallback) => value ? toIsoDate(value) : fallback;
+  const correctionStartDate = date(rules.correctionStartDate, startDate);
+  const correctionEndDate = date(rules.correctionEndDate, endDate);
+  const savingsStartDate = date(rules.savingsStartDate, undefined);
+  const savingsEndDate = date(rules.savingsEndDate, "2021-12-08");
+  const selicStartDate = date(rules.selicStartDate, "2021-12-09");
+  if (!map(rules.correctionIndex) || !map(rules.savingsIndex) || !map(rules.selicIndex) || !correctionStartDate || !correctionEndDate || !savingsEndDate || !selicStartDate || (rules.savingsStartDate && !savingsStartDate)) return null;
+  return { correctionIndex: map(rules.correctionIndex), correctionStartDate, correctionEndDate, savingsIndex: map(rules.savingsIndex), ...(savingsStartDate ? { savingsStartDate } : {}), savingsEndDate, selicIndex: map(rules.selicIndex), selicStartDate };
 }
 
 function ResultStep({ form, result }) {
@@ -359,7 +399,7 @@ function ResultStep({ form, result }) {
 
 function calculationKey(form) {
   const changes = (form.ruleChanges ?? []).map((change) => `${change.date}@${change.index}`).join(",");
-  return [form.type, form.amount, form.startDate, form.endDate, form.index, form.months, form.interest, form.salaryPrevious, form.salaryNew, form.selicFactor, form.decimoTerceiro, form.vacationsWithBonus, changes].join("|");
+  return [form.type, form.amount, form.startDate, form.endDate, form.index, form.months, form.interest, form.salaryPrevious, form.salaryNew, JSON.stringify(form.salaryEntries), form.selicFactor, form.decimoTerceiro, form.vacationsWithBonus, changes].join("|");
 }
 
 function buildPayload(form) {
@@ -398,9 +438,15 @@ function buildPayload(form) {
     }
     case "salary": {
       const salaryPreviousInCents = parseCurrencyToCents(form.salaryPrevious);
-      const salaryNewInCents = parseCurrencyToCents(form.salaryNew);
-      if (!salaryPreviousInCents || !salaryNewInCents || salaryNewInCents <= salaryPreviousInCents) return null;
-      return { type: "salary", salaryPreviousInCents, salaryNewInCents, decimoTerceiro: form.decimoTerceiro, vacationsWithBonus: form.vacationsWithBonus, indexSlug: indexSlugs[form.index] ?? "ipca_e", startDate, endDate };
+      const salaryNewInCents = parseCurrencyToCents(form.salaryNew) ?? salaryPreviousInCents;
+      const entries = parseSalaryEntries(form.salaryEntries, salaryPreviousInCents / 100);
+      if (form.salaryEntries.length && !entries) return null;
+      if (!salaryPreviousInCents || (!form.salaryEntries.length && salaryNewInCents <= salaryPreviousInCents)) return null;
+      const citationDate = toIsoDate(form.citationDate);
+      if (form.salaryEntries.length && !citationDate) return null;
+      const rules = buildSalaryRules(form.salaryRules, startDate, endDate);
+      if (form.salaryEntries.length && !rules) return null;
+      return { type: "salary", salaryPreviousInCents, salaryNewInCents, decimoTerceiro: form.decimoTerceiro, vacationsWithBonus: form.vacationsWithBonus, indexSlug: indexSlugs[form.index] ?? "ipca_e", startDate, endDate, ...(entries ? { entries, citationDate, rules } : {}) };
     }
     case "judicial": {
       const principalInCents = parseCurrencyToCents(form.amount);
@@ -421,8 +467,8 @@ function draftPayload(form) {
   if (form.type === "salary") {
     const previous = parseCurrencyToCents(form.salaryPrevious);
     const current = parseCurrencyToCents(form.salaryNew);
-    if (!previous || !current || current <= previous) return null;
-    principalInCents = current - previous;
+    if (!previous) return null;
+    principalInCents = form.salaryEntries.length ? previous : current > previous ? current - previous : null;
   } else {
     principalInCents = parseCurrencyToCents(form.amount);
   }
@@ -436,6 +482,40 @@ function draftPayload(form) {
     startDate,
     endDate,
     principalInCents,
+    draftForm: form,
+  };
+}
+
+function restoreDraftForm(draft) {
+  const savedForm = draft.params?.draftForm;
+  if (savedForm && typeof savedForm === "object" && calculationTypes.some((item) => item.id === savedForm.type)) {
+    return {
+      ...initialForm,
+      ...savedForm,
+      salaryRules: { ...initialForm.salaryRules, ...(savedForm.salaryRules ?? {}) },
+      salaryEntries: Array.isArray(savedForm.salaryEntries) ? savedForm.salaryEntries : [],
+      ruleChanges: Array.isArray(savedForm.ruleChanges) ? savedForm.ruleChanges : [],
+    };
+  }
+
+  const type = calculationTypes.find((item) => item.label === draft.calculationType)?.id ?? "monetary";
+  const date = (value) => {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return `${String(parsed.getUTCDate()).padStart(2, "0")}/${String(parsed.getUTCMonth() + 1).padStart(2, "0")}/${parsed.getUTCFullYear()}`;
+  };
+  const amount = maskCurrencyFromNumber((draft.principalInCents ?? 0) / 100);
+  return {
+    ...initialForm,
+    type,
+    typeLabel: calculationTypes.find((item) => item.id === type)?.label ?? initialForm.typeLabel,
+    amount,
+    salaryPrevious: type === "salary" ? amount : initialForm.salaryPrevious,
+    title: draft.title ?? initialForm.title,
+    startDate: date(draft.startDate),
+    endDate: date(draft.endDate),
+    clientId: draft.clientId ?? "",
+    processId: draft.processId ?? "",
   };
 }
 
@@ -450,6 +530,34 @@ function parsePercent(value) {
   const normalized = String(value ?? "").trim().replace(/\s*%\s*$/g, "").replace(",", ".");
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed / 100 : NaN;
+}
+
+function parseSalaryEntries(entries, baseReceived) {
+  if (!entries.length) return null;
+  const parsed = [];
+  for (const entry of entries) {
+    const adjustment = parseBrazilianNumber(entry.adjustmentPercentage || "0");
+    const vacation = parseBrazilianNumber(entry.vacationPercentage || "0");
+    if (!entry.competence.trim() || !entry.description.trim() || adjustment == null || vacation == null) return null;
+    const previous = parsed.at(-1);
+    const previousSubsidy = [...parsed].reverse().find((item) => item.description === "Subsídio");
+    if ((entry.description === "13º salário" || entry.description === "Adicional de férias") && !previous) return null;
+    const calculatedReceived = entry.description === "13º salário" ? previous.receivedInCents / 100 : entry.description === "Adicional de férias" ? (previous.receivedInCents / 100) * vacation / 100 : baseReceived;
+    const receivedOverride = parseBrazilianNumber(entry.receivedOverride);
+    const received = receivedOverride == null ? calculatedReceived : receivedOverride;
+    const dueOverride = parseBrazilianNumber(entry.dueOverride);
+    const dueBase = previousSubsidy ? previousSubsidy.dueInCents / 100 : received;
+    const due = entry.description === "13º salário" ? previous.dueInCents / 100 : entry.description === "Adicional de férias" ? (previous.dueInCents / 100) * vacation / 100 : dueBase * (1 + adjustment / 100);
+    parsed.push({ competence: entry.competence.trim(), description: entry.description.trim(), dueInCents: (dueOverride == null ? due : dueOverride) * 100, receivedInCents: received * 100 });
+  }
+  return parsed;
+}
+
+function parseBrazilianNumber(value) {
+  const normalized = String(value ?? "").trim().replace(/r\$\s*/gi, "").replace(/\./g, "").replace(",", ".");
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function maskCurrency(input) {
@@ -582,6 +690,37 @@ function IndexField({ form, update, withNone = false, label = "Indexador" }) {
   return <SelectField label={label} value={options.includes(form.index) ? form.index : options[0]} onChange={(value) => update("index", value)} options={options} />;
 }
 
+function IndexCompetenceField({ label, indexLabel, value, onChange }) {
+  const slug = indexSlugs[indexLabel];
+  const detail = useQuery({ queryKey: ["index-competences", slug], queryFn: () => api.get(`/api/indices/${slug}`), enabled: Boolean(slug) });
+  const competences = (detail.data?.values ?? [])
+    .filter((item) => item.published)
+    .map((item) => ({ value: formatCompetenceDate(item.referenceDate), monthlyValue: item.monthlyValue, sortKey: item.referenceDate }))
+    .sort((left, right) => String(right.sortKey).localeCompare(String(left.sortKey)));
+  const currentMonth = competenceMonth(value);
+  const selected = competences.find((item) => competenceMonth(item.value) === currentMonth) ?? competences[0];
+
+  return <label className="field"><span>{label} <Info size={12} /></span><select value={selected?.value ?? ""} disabled={detail.isLoading || !competences.length} onChange={(event) => onChange(event.target.value)}>
+    {!competences.length && <option value="">{detail.isLoading ? "Carregando competências..." : "Sem competências cadastradas"}</option>}
+    {competences.map((item) => <option key={item.value} value={item.value}>{item.value} · {formatIndexRate(item.monthlyValue)}</option>)}
+  </select></label>;
+}
+
+function formatCompetenceDate(value) {
+  const date = new Date(value);
+  return `${String(date.getUTCDate()).padStart(2, "0")}/${String(date.getUTCMonth() + 1).padStart(2, "0")}/${date.getUTCFullYear()}`;
+}
+
+function competenceMonth(value) {
+  const match = String(value ?? "").trim().match(/^\d{1,2}\/(\d{1,2})\/(\d{4})$/);
+  return match ? `${match[2]}-${match[1].padStart(2, "0")}` : null;
+}
+
+function formatIndexRate(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? `${numeric.toLocaleString("pt-BR", { maximumFractionDigits: 6 })}%` : "—";
+}
+
 function Field({ label, value, onChange = () => {}, icon: Icon, hint }) {
   return <label className="field"><span>{label} <Info size={12} /></span><div className="input-wrap"><input value={value} onChange={(event) => onChange(event.target.value)} />{Icon && <Icon size={17} />}</div>{hint && <small className="field-hint">{hint}</small>}</label>;
 }
@@ -590,8 +729,77 @@ function NumberField({ label, value, onChange = () => {}, hint }) {
   return <label className="field"><span>{label} <Info size={12} /></span><div className="input-wrap"><input inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} /></div>{hint && <small className="field-hint">{hint}</small>}</label>;
 }
 
-function MoneyField({ label, value, onChange = () => {}, icon: Icon }) {
-  return <label className="field"><span>{label} <Info size={12} /></span><div className="input-wrap"><input inputMode="numeric" value={value} onChange={(event) => onChange(maskCurrency(event.target.value))} />{Icon && <Icon size={17} />}</div></label>;
+function MoneyField({ label, value, onChange = () => {}, icon: Icon, readOnly = false }) {
+  return <label className="field"><span>{label} <Info size={12} /></span><div className="input-wrap"><input inputMode="numeric" readOnly={readOnly} value={value} onChange={(event) => onChange(maskCurrency(event.target.value))} />{Icon && <Icon size={17} />}</div></label>;
+}
+
+function SalaryEntriesEditor({ entries, salaryReceived, citationDate, onCitationDateChange, onChange }) {
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [repeatFrom, setRepeatFrom] = useState("");
+  const [repeatTo, setRepeatTo] = useState("");
+  const addEntry = () => onChange([...entries, { competence: "", description: "Subsídio", adjustmentPercentage: "0", vacationPercentage: "" }]);
+  const updateEntry = (index, field, value) => onChange(entries.map((entry, current) => current === index ? { ...entry, [field]: value } : entry));
+  const removeEntry = (index) => onChange(entries.filter((_, current) => current !== index));
+  const duplicateEntry = (index) => onChange([...entries.slice(0, index + 1), { ...entries[index] }, ...entries.slice(index + 1)]);
+  const insertEntryBelow = (index) => onChange([...entries.slice(0, index + 1), { competence: "", description: "Subsídio", adjustmentPercentage: "0", vacationPercentage: "" }, ...entries.slice(index + 1)]);
+  const reorder = (targetIndex) => { if (draggedIndex == null || draggedIndex === targetIndex) return; const next = entries.slice(); const [item] = next.splice(draggedIndex, 1); next.splice(draggedIndex < targetIndex ? targetIndex - 1 : targetIndex, 0, item); onChange(next); setDraggedIndex(null); setDragOverIndex(null); };
+  const repeatCompetences = () => {
+    const from = competenceToMonth(repeatFrom);
+    const to = competenceToMonth(repeatTo);
+    if (!from || !to || from > to) return;
+    const generated = [];
+    for (let value = from; value <= to; value += 1) generated.push({ competence: monthToCompetence(value), description: "Subsídio", adjustmentPercentage: "0", vacationPercentage: "" });
+    onChange([...entries, ...generated]);
+    setRepeatFrom("");
+    setRepeatTo("");
+  };
+  return <div className="section-block"><h2>Lançamentos detalhados</h2>
+    <p className="section-description">Cadastre cada competência diretamente no sistema. Arraste pelo ícone para ordenar. O reajuste é aplicado aos valores-base; férias usa também o percentual informado. IPCA-E, poupança e Selic são buscados automaticamente.</p>
+    <Field label="Data da citação" value={citationDate} onChange={onCitationDateChange} hint="Usada para iniciar a incidência dos juros de poupança." />
+    <div className="salary-repeat"><Field label="Repetir competência de" value={repeatFrom} onChange={setRepeatFrom} /><Field label="até" value={repeatTo} onChange={setRepeatTo} /><button className="add-rule-button" type="button" onClick={repeatCompetences}>Gerar competências</button></div>
+    {entries.map((entry, index) => { const values = entryValues(entries, index, salaryReceived); return <div className={`salary-entry-row ${dragOverIndex === index && draggedIndex !== index ? "drop-target" : ""}`} key={index} onDragOver={(event) => { event.preventDefault(); setDragOverIndex(index); }} onDragLeave={() => setDragOverIndex(null)} onDrop={() => reorder(index)}>
+      <div className="salary-entry-fields">
+        <button className="drag-handle" type="button" draggable onDragStart={() => setDraggedIndex(index)} onDragEnd={() => { setDraggedIndex(null); setDragOverIndex(null); }} aria-label={`Reordenar lançamento ${index + 1}`}><GripVertical size={18} /></button>
+        <Field label="Competência (MM/AAAA)" value={entry.competence} onChange={(value) => updateEntry(index, "competence", value)} />
+        <SelectField label="Evento" value={entry.description} onChange={(value) => updateEntry(index, "description", value)} options={["Subsídio", "13º salário", "Adicional de férias", "Outro"]} />
+        {entry.description !== "13º salário" && entry.description !== "Adicional de férias" && <NumberField label="Reajuste (%)" value={entry.adjustmentPercentage ?? "0"} onChange={(value) => updateEntry(index, "adjustmentPercentage", value)} />}
+        {entry.description === "Adicional de férias" && <NumberField label="Férias (%)" value={entry.vacationPercentage ?? ""} onChange={(value) => updateEntry(index, "vacationPercentage", value)} />}
+        <MoneyField label="Valor devido" value={entry.dueOverride ?? values.due} onChange={(value) => updateEntry(index, "dueOverride", value)} />
+        <MoneyField label="Valor recebido" value={entry.receivedOverride ?? values.received} onChange={(value) => updateEntry(index, "receivedOverride", value)} />
+      </div>
+      <div className="salary-entry-actions"><button className="icon-button" aria-label={`Adicionar lançamento abaixo de ${index + 1}`} type="button" onClick={() => insertEntryBelow(index)}><Plus size={16} /></button><button className="icon-button" aria-label={`Duplicar lançamento ${index + 1}`} type="button" onClick={() => duplicateEntry(index)}><Copy size={16} /></button><button className="icon-button rule-remove" aria-label={`Remover lançamento ${index + 1}`} type="button" onClick={() => removeEntry(index)}><Trash2 size={16} /></button></div>
+    </div>})}
+    <button className="add-rule-button" type="button" onClick={addEntry}>+ Adicionar lançamento</button>
+  </div>;
+}
+
+function entryValues(entries, index, salaryReceived) {
+  const entry = entries[index];
+  const previous = index > 0 ? entryValues(entries, index - 1, salaryReceived) : null;
+  if (entry.description === "13º salário" && previous) return { ...previous, received: entry.receivedOverride ?? previous.received };
+  if (entry.description === "Adicional de férias" && previous) {
+    const vacation = (parseBrazilianNumber(entry.vacationPercentage) ?? 0) / 100;
+    return { due: maskCurrencyFromNumber((parseBrazilianNumber(previous.due) ?? 0) * vacation), received: entry.receivedOverride ?? maskCurrencyFromNumber((parseBrazilianNumber(previous.received) ?? 0) * vacation) };
+  }
+  const adjustment = parseBrazilianNumber(entry.adjustmentPercentage || "0") ?? 0;
+  const received = parseBrazilianNumber(entry.receivedOverride ?? salaryReceived) ?? 0;
+  const previousSubsidyIndex = entries.slice(0, index).map((item, current) => ({ item, current })).filter(({ item }) => item.description === "Subsídio").at(-1)?.current;
+  const previousSubsidy = previousSubsidyIndex == null ? null : entryValues(entries, previousSubsidyIndex, salaryReceived);
+  const dueBase = previousSubsidy ? parseBrazilianNumber(previousSubsidy.due) ?? received : received;
+  return { due: entry.dueOverride ?? maskCurrencyFromNumber(dueBase * (1 + adjustment / 100)), received: entry.receivedOverride ?? maskCurrencyFromNumber(received) };
+}
+
+function competenceToMonth(value) {
+  const match = String(value).trim().match(/^(\d{2})\/(\d{4})$/);
+  if (!match || Number(match[1]) < 1 || Number(match[1]) > 12) return null;
+  return Number(match[2]) * 12 + Number(match[1]) - 1;
+}
+
+function monthToCompetence(value) {
+  const month = value % 12 + 1;
+  const year = Math.floor(value / 12);
+  return `${String(month).padStart(2, "0")}/${year}`;
 }
 
 function SelectField({ label, value, onChange, options }) {

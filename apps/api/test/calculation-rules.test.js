@@ -61,6 +61,41 @@ test("REGRA-DIF-001 corrige diferença salarial com reflexos", async () => {
   assert.equal(result.params.reflections.decimoTerceiro, true);
 });
 
+test("REGRA-DIF-002 reproduz a memória detalhada de diferenças salariais", async () => {
+  const entries = [
+    ["11/2015", "Subsídio", 582012.0591, 518127, 1.379823, .269413, .3519],
+    ["12/2015", "Subsídio", 582012, 518127, 1.368193, .269413, .3519],
+    ["01/2016", "Subsídio", 582012, 518127, 1.352237, .269413, .3519],
+    ["01/2016", "Adicional de férias", 116402.4118, 103625.4, 1.352237, .269413, .3519],
+    ["02/2016", "Subsídio", 582012, 518127, 1.33991, .269413, .3519],
+    ["02/2016", "13º salário", 582012, 518127, 1.33991, .269413, .3519],
+    ["03/2016", "Subsídio", 672224.9283, 598436.685, 1.32115, .262234, .3519],
+    ["04/2016", "Subsídio", 672224.9283, 598436.685, 1.315493, .255923, .3519],
+    ["05/2016", "Subsídio", 672224.9283, 598436.685, 1.308818, .249382, .3519],
+    ["05/2016", "Adicional de férias", 74691.584, 66492.89851, 1.308818, .249382, .3519],
+    ["06/2016", "Subsídio", 672224.9283, 598436.685, 1.297658, .242329, .3519],
+    ["07/2016", "Subsídio", 672224.9283, 598436.685, 1.292488, .2357, .3519],
+    ["08/2016", "Subsídio", 672224.9283, 598436.685, 1.285546, .228142, .3519],
+    ["09/2016", "Subsídio", 672224.9283, 598436.685, 1.279787, .221559, .3519],
+    ["09/2016", "Adicional de férias", 149383.168, 132985.797, 1.279787, .221559, .3519],
+    ["10/2016", "Subsídio", 672224.9283, 598436.685, 1.27685, .21495, .3519],
+    ["11/2016", "Subsídio", 672224.9283, 598436.685, 1.274429, .208515, .3519],
+  ].map(([competence, description, dueInCents, receivedInCents, correctionFactor, interestRate, selicRate]) => ({ competence, description, dueInCents, receivedInCents, correctionFactor, interestRate, selicRate }));
+  const result = await calculateSalaryDifference({
+    salaryPreviousInCents: 1,
+    salaryNewInCents: 2,
+    entries,
+    startDate: "2015-11-01",
+    endDate: "2025-01-31",
+  }, noGaps);
+
+  assert.equal(result.traceabilityRuleId, "REGRA-DIF-002");
+  assert.equal(result.params.calculationMode, "detailed");
+  assert.equal(result.months.length, 17);
+  assert.equal(result.correctedInCents, 2_262_008);
+  assert.equal(result.params.summary.selicInCents, 588_801);
+});
+
 test("REGRA-JUD-001 combina IPCA-E com fator Selic informado", async () => {
   const repository = {
     ...noGaps,

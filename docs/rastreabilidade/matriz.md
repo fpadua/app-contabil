@@ -10,7 +10,8 @@ Esta matriz impede que uma fórmula seja implementada sem origem conhecida e sem
 | REGRA-PRICE-001 | `FONTE-PRICE-IGPM-001` | `Plan1`, colunas C:P | Price com correção por IGP-M | `packages/calculation-engine/src/amortization.js` + `apps/api/src/services/calculation-service.js` | Núcleo implementado, pendente comparação com planilha |
 | REGRA-INPC-001 | `FONTE-CORRECAO-INPC-001` | `Plan1!C18:F19` | INPC, juros anuais proporcionais e cálculo por dias | A implementar | Mapeada |
 | REGRA-JUD-001 | `FONTE-DIF-SALARIAL-001` | `Plan 1!F12:M12` | IPCA-E e poupança até 08/12/2021; Selic após 09/12/2021 | `packages/calculation-engine/src/judicial.js` + `apps/api/src/services/calculation-service.js` | Núcleo implementado (IPCA-E + fator Selic informado), pendente série Selic e comparação com planilha |
-| REGRA-DIF-001 | Proposta de negócio | Documento de escopo | Corrigir diferença salarial com reflexos de 13º e férias | `packages/calculation-engine/src/salary.js` + `apps/api/src/services/calculation-service.js` | Núcleo implementado, aguardando fonte original para comparação |
+| REGRA-DIF-001 | Proposta de negócio | Documento de escopo | Corrigir diferença salarial com reflexos de 13º e férias | `packages/calculation-engine/src/salary.js` + `apps/api/src/services/calculation-service.js` | Modo simplificado legado |
+| REGRA-DIF-002 | `FONTE-DIF-SALARIAL-001` | `Plan 1!A12:M37` | Lançamentos individualizados (inclusive 13º/férias), IPCA-E, juros de poupança e Selic por competência | `packages/calculation-engine/src/salary.js` + `apps/api/src/services/calculation-service.js` | Implementado e validado por regressão |
 | REGRA-ACORDO-001 | `FONTE-ACORDOS-001` | `Plan 1`, `Acordo 1`, `Acordo 2` | Separar períodos por acordos e aplicar IGP-M/INPC conforme marco | A implementar | Mapeada |
 
 ## Critério de aceite

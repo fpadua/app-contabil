@@ -88,6 +88,25 @@ export class DebitPlaywrightProvider {
 
       report(45, "Localizando tabela histórica");
       const historicalTable = await findTableByHeaders(page, ["Ano", "Jan", "Dez"]);
+      if (!historicalTable && slug === "poupanca") {
+        report(60, "Aplicando leitor especifico da poupanca");
+        const savingsTables = await findTablesByHeaders(page, ["Data", "%"]);
+        const savingsMatrices = await Promise.all(savingsTables.map((table) => tableToMatrix(table)));
+        const values = parseSavingsCards(savingsMatrices)
+          .map((item) => ({ ...item, sourceUrl, rawData: { ...item.rawData, sourceUrl } }))
+          .filter((item) => isWithinPeriod(item.referenceDate, from, to));
+
+        if (!values.length) throw new Error(`Nenhuma competencia encontrada para ${slug} no periodo solicitado`);
+        report(100, "Serie coletada");
+        return {
+          basis: {
+            monthlyValue: "percent",
+            accumulatedValue: "rolling-12-month-percent-when-published",
+            sourceUrl,
+          },
+          values,
+        };
+      }
       if (!historicalTable) throw new Error("Tabela histórica não encontrada; o layout da página pode ter mudado");
 
       const expandButton = page.locator("#btnTabelaCompleta").first();
@@ -145,13 +164,25 @@ export class DebitPlaywrightProvider {
 }
 
 async function findTableByHeaders(page, expectedHeaders) {
+  const [table] = await findTablesByHeaders(page, expectedHeaders);
+  return table ?? null;
+}
+
+async function findTablesByHeaders(page, expectedHeaders) {
   const tables = page.locator("table");
+  const matches = [];
   for (let index = 0; index < await tables.count(); index += 1) {
     const table = tables.nth(index);
-    const headers = (await table.locator("thead th").allTextContents()).map(normalizeText);
-    if (expectedHeaders.every((expected) => headers.includes(normalizeText(expected)))) return table;
+    const headers = await readTableHeaders(table);
+    if (expectedHeaders.every((expected) => headers.includes(normalizeText(expected)))) matches.push(table);
   }
-  return null;
+  return matches;
+}
+
+async function readTableHeaders(table) {
+  const theadHeaders = await table.locator("thead th").allTextContents();
+  if (theadHeaders.length) return theadHeaders.map(normalizeText);
+  return (await table.locator("tr").first().locator("th, td").allTextContents()).map(normalizeText);
 }
 
 async function tableToMatrix(table) {
@@ -209,6 +240,35 @@ export function parseRecentTable(matrix) {
     });
   }
   return result;
+}
+
+export function parseSavingsCards(matrices) {
+  if (!Array.isArray(matrices)) throw new Error("Tabelas da poupanca invalidas");
+  const values = new Map();
+
+  for (const matrix of matrices) {
+    if (!Array.isArray(matrix)) continue;
+    const headerIndex = matrix.findIndex((row) => normalizeText(row[0]) === "data" && normalizeText(row[1]) === "%");
+    if (headerIndex < 0) continue;
+
+    for (const row of matrix.slice(headerIndex + 1)) {
+      const match = String(row[0] ?? "").trim().match(/^(\d{2})\/(\d{4})$/);
+      if (!match) continue;
+      const period = `${match[2]}-${match[1]}`;
+      const rawValue = String(row[1] ?? "").trim();
+      const monthlyValue = parseBrazilianDecimal(rawValue);
+      values.set(period, {
+        referenceDate: new Date(`${period}-01T00:00:00.000Z`),
+        monthlyValue,
+        accumulatedValue: null,
+        accumulatedPositive: null,
+        published: monthlyValue !== null,
+        rawData: { savingsRow: row },
+      });
+    }
+  }
+
+  return [...values.values()].sort((left, right) => left.referenceDate - right.referenceDate);
 }
 
 export function parseBrazilianDecimal(value) {

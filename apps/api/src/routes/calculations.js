@@ -66,7 +66,7 @@ export async function calculationRoutes(app, { repository = new CalculationRepos
   app.post("/", async (request, reply) => {
     const parsed = saveCalculationSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ code: "INVALID_CALCULATION_INPUT", issues: parsed.error.issues });
-    const { result, startDate: draftStartDate, endDate: draftEndDate, principalInCents: draftPrincipalInCents, ...record } = parsed.data;
+    const { result, startDate: draftStartDate, endDate: draftEndDate, principalInCents: draftPrincipalInCents, draftForm, ...record } = parsed.data;
     if (!result) {
       return reply.status(201).send(await repository.create({
         ...record,
@@ -79,7 +79,7 @@ export async function calculationRoutes(app, { repository = new CalculationRepos
         correctionInCents: null,
         months: null,
         installments: null,
-        params: null,
+        params: draftForm ? { draftForm } : null,
       }));
     }
     return reply.status(201).send(await repository.create({

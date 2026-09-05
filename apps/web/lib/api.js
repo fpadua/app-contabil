@@ -2,9 +2,11 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333";
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 async function request(path, options = {}) {
+  const headers = { ...(options.headers ?? {}) };
+  if (options.body != null) headers["Content-Type"] = "application/json";
   const response = await fetch(`${apiUrl}${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
+    headers,
   });
   if (response.status === 204) return null;
   const payload = await response.json().catch(() => null);

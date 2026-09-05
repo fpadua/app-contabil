@@ -49,14 +49,14 @@ export default function IndexDetailPage() {
                       <span className="index-grid-year" role="rowheader">{year.year}</span>
                       {MONTH_LABELS.map((label, month) => {
                         const cell = year.months[month];
-                        return <span className={cell === undefined ? "index-grid-empty" : ""} key={label}>{cell ?? "—"}</span>;
+                        return <span className={cell === undefined ? "index-grid-empty" : Number(cell.value) < 0 ? "negative" : ""} key={label}>{cell?.display ?? "—"}</span>;
                       })}
                     </div>
                   ))}
                 </div>
               </div>
             )}
-            {latest && <div className="card-foot"><span>Última competência: <strong>{formatPeriod(latest.referenceDate)}</strong> · variação mensal <strong>{formatDecimal(latest.monthlyValue, "%")}</strong></span></div>}
+            {latest && <div className="card-foot"><span>Última competência: <strong>{formatPeriod(latest.referenceDate)}</strong> · variação mensal <strong>{latest.monthlyValue < 0 ? <span className="negative">{formatDecimal(latest.monthlyValue, "%")}</span> : formatDecimal(latest.monthlyValue, "%")}</strong></span></div>}
           </div>
         )}
       </section>
@@ -72,7 +72,7 @@ function buildYearGrid(values) {
     const [year, month] = String(value.referenceDate).slice(0, 7).split("-").map(Number);
     if (!year) continue;
     if (!rows.has(year)) rows.set(year, { year, months: new Array(12).fill(undefined) });
-    rows.get(year).months[month - 1] = formatDecimal(value.monthlyValue);
+    rows.get(year).months[month - 1] = { value: value.monthlyValue, display: formatDecimal(value.monthlyValue) };
   }
   return [...rows.values()];
 }

@@ -7,6 +7,7 @@ import {
   sacIndexedSchedule,
   sacSchedule,
   salaryDifferenceSchedule,
+  detailedSalaryDifferenceSchedule,
 } from "@contabil/calculation-engine";
 import { EconomicIndexRepository } from "../repositories/economic-index-repository.js";
 import { assertIndexCoverage } from "./index-coverage-service.js";
@@ -133,6 +134,23 @@ export async function calculatePrice(input, repository = new EconomicIndexReposi
 }
 
 export async function calculateSalaryDifference(input, repository = new EconomicIndexRepository()) {
+  if (input.entries?.length) {
+    const entries = await enrichSalaryEntries(input, repository);
+    const schedule = detailedSalaryDifferenceSchedule({ entries });
+    return {
+      type: "salary",
+      principalInCents: schedule.principalInCents,
+      indexSlug: input.indexSlug ?? "ipca_e",
+      startDate: input.startDate,
+      endDate: input.endDate,
+      accumulatedFactor: 1,
+      correctedInCents: schedule.correctedInCents,
+      correctionInCents: schedule.correctionInCents,
+      traceabilityRuleId: "REGRA-DIF-002",
+      months: schedule.months,
+      params: { calculationMode: "detailed", summary: schedule.summary },
+    };
+  }
   const indexSlug = input.indexSlug ?? "ipca_e";
   const { startDate, endDate } = input;
   await assertIndexCoverage({ repository, slug: indexSlug, startDate, endDate });
@@ -155,9 +173,54 @@ export async function calculateSalaryDifference(input, repository = new Economic
     correctionInCents: schedule.correctionInCents,
     traceabilityRuleId: "REGRA-DIF-001",
     months: schedule.months,
-    params: schedule.params,
+    params: { calculationMode: "simplified", ...schedule.params },
   };
 }
+
+async function enrichSalaryEntries(input, repository) {
+  if (input.entries.every((entry) => entry.correctionFactor != null && entry.interestRate != null && entry.selicRate != null)) return input.entries;
+  if (!input.citationDate) throw new Error("Informe a data de citação para calcular juros automaticamente.");
+  const rules = input.rules ?? {};
+  const correctionEnd = rules.correctionEndDate ?? input.endDate;
+  const interestEnd = rules.savingsEndDate ?? "2021-12-08";
+  const selicStart = rules.selicStartDate ?? "2021-12-09";
+  const selicRate = await accumulatedRate(repository, rules.selicIndex ?? ["selic", "selic_bacen"], selicStart, input.endDate);
+  return Promise.all(input.entries.map(async (entry) => {
+    const startDate = competenceToDate(entry.competence);
+    return {
+      ...entry,
+      correctionFactor: await accumulatedFactor(repository, rules.correctionIndex ?? "ipca_e", laterDate(startDate, rules.correctionStartDate ?? startDate), correctionEnd),
+      interestRate: await accumulatedRate(repository, rules.savingsIndex ?? ["poupanca", "poupanca_bacen"], laterDate(startDate, rules.savingsStartDate ?? input.citationDate), interestEnd),
+      selicRate,
+    };
+  }));
+}
+
+async function accumulatedFactor(repository, slug, startDate, endDate) {
+  if (startDate > endDate) return 1;
+  const aliases = Array.isArray(slug) ? slug : slug === "selic" ? ["selic", "selic_bacen"] : slug === "poupanca" ? ["poupanca", "poupanca_bacen"] : [slug];
+  let lastError;
+  for (const indexSlug of aliases) {
+    try {
+      return seriesAccumulatedFactor(await loadMonthlyStats({ repository, slug: indexSlug, startDate, endDate }));
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+async function accumulatedRate(repository, slug, startDate, endDate) {
+  return (await accumulatedFactor(repository, slug, startDate, endDate)) - 1;
+}
+
+function competenceToDate(competence) {
+  const match = String(competence).match(/^(\d{2})\/(\d{4})$/);
+  if (!match) throw new Error("Competência deve estar no formato MM/AAAA.");
+  return `${match[2]}-${match[1]}-01`;
+}
+
+function laterDate(left, right) { return left > right ? left : right; }
 
 export async function calculateJudicialCorrection(input, repository = new EconomicIndexRepository()) {
   const { principalInCents, startDate, endDate } = input;

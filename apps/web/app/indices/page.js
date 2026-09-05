@@ -209,7 +209,7 @@ export default function IndicesPage() {
                   {columns.map((column) => {
                     if (column.key === "index") return <span key={column.key}><Link className="index-name-link" href={`/indices/${row.slug}`}>{row.index}</Link></span>;
                     if (column.key === "actions") return <span className="row-actions" key={column.key}>{rowActions(row, rowIndex >= rows.length - 2)}</span>;
-                    return <span className={column.key === "status" || column.key === "origin" ? `status-pill ${pillClass(row[column.key], column.key)}` : ""} key={column.key}>{row[column.key]}</span>;
+                    return <span className={cellClass(row, column)} key={column.key}>{row[column.key]}</span>;
                   })}
                 </div>
               ))}
@@ -305,6 +305,8 @@ function mapIndex(item) {
     reference: latest ? formatPeriod(latest.referenceDate) : "Sem dados",
     monthly: formatDecimal(latest?.monthlyValue, "%"),
     accumulated: formatDecimal(latest?.accumulatedValue, "%"),
+    monthlyValue: latest?.monthlyValue,
+    accumulatedValue: latest?.accumulatedValue,
     source: item.source,
     origin: item.origin === "IMPORTED" ? "Importado" : "Site",
     status: latest?.published ? "Atualizado" : "Pendente",
@@ -332,4 +334,11 @@ function pillClass(value, key) {
   if (normalized.includes("conclu") || normalized.includes("atualizado") || normalized.includes("validado") || normalized.includes("ativo")) return "success";
   if (normalized.includes("pendente") || normalized.includes("andamento") || normalized.includes("revisão")) return "warning";
   return "neutral";
+}
+
+function cellClass(row, column) {
+  if (column.key === "status" || column.key === "origin") return `status-pill ${pillClass(row[column.key], column.key)}`;
+  if (column.key === "monthly" && row.monthlyValue != null && Number(row.monthlyValue) < 0) return "negative";
+  if (column.key === "accumulated" && row.accumulatedValue != null && Number(row.accumulatedValue) < 0) return "negative";
+  return "";
 }
