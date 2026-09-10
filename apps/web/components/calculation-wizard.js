@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, Bookmark, Building2, CalendarDays, Calculator, ChartNoAxesColumnIncreasing, Check, Copy, Download, FileUp, GripVertical, Info, Landmark, Link2, Loader2, Plus, Scale, Trash2, Users, X } from "lucide-react";
 import { Stepper } from "./stepper";
@@ -93,13 +93,18 @@ export function CalculationWizard() {
     loadedDraftId.current = draft.data.id;
   }, [draft.data]);
 
-  function openResultStep() {
+  function openResultStep(forceRecalculation = false) {
     setStep(4);
     const key = calculationKey(form);
-    if (result?.key === key) return;
+    if (!forceRecalculation && result?.key === key) return;
     const payload = buildPayload(form);
     if (!payload) {
       setResult({ key, pending: false, data: null, error: new Error("Confira os valores, as datas e as mudanças de regra informados nos passos anteriores.") });
+      return;
+    }
+    const salaryEntryError = validateSalaryEntryDifference(payload);
+    if (salaryEntryError) {
+      setResult({ key, pending: false, data: null, error: new Error(salaryEntryError) });
       return;
     }
     setResult({ key, pending: true, data: null, error: null });
@@ -178,6 +183,7 @@ export function CalculationWizard() {
           <div className="wizard-actions">
             {step > 1 && <button className="back-button" onClick={() => setStep((current) => current - 1)} type="button"><ArrowLeft size={17} /> Voltar</button>}
             {step < 4 && <button className="primary-button" onClick={handleNext} type="button">Avançar <ArrowRight size={18} /></button>}
+            {step === 4 && <button className="secondary-button" disabled={result?.pending} onClick={() => openResultStep(true)} type="button">{result?.pending ? <Loader2 className="spinning" size={17} /> : <Calculator size={17} />} Recalcular</button>}
             {step === 4 && <button className="primary-button" disabled={result?.pending || !result?.data || save.isPending} onClick={() => save.mutate({ title: form.title, calculationType: form.typeLabel, clientId: form.clientId || undefined, processId: form.processId || undefined, result: result.data })} type="button">{save.isPending ? <Loader2 className="spinning" size={18} /> : <Check size={18} />} {save.isPending ? "Salvando..." : "Salvar cálculo"}</button>}
           </div>
         </div>
@@ -399,7 +405,15 @@ function ResultStep({ form, result }) {
 
 function calculationKey(form) {
   const changes = (form.ruleChanges ?? []).map((change) => `${change.date}@${change.index}`).join(",");
-  return [form.type, form.amount, form.startDate, form.endDate, form.index, form.months, form.interest, form.salaryPrevious, form.salaryNew, JSON.stringify(form.salaryEntries), form.selicFactor, form.decimoTerceiro, form.vacationsWithBonus, changes].join("|");
+  return [form.type, form.amount, form.startDate, form.endDate, form.index, form.months, form.interest, form.salaryPrevious, form.salaryNew, form.citationDate, JSON.stringify(form.salaryEntries), JSON.stringify(form.salaryRules), form.selicFactor, form.decimoTerceiro, form.vacationsWithBonus, changes].join("|");
+}
+
+function validateSalaryEntryDifference(payload) {
+  if (payload.type !== "salary" || !payload.entries) return null;
+  const index = payload.entries.findIndex((entry) => entry.dueInCents <= entry.receivedInCents);
+  if (index < 0) return null;
+  const entry = payload.entries[index];
+  return `Lançamento ${index + 1} (${entry.competence}): o valor devido (${maskCurrencyFromNumber(entry.dueInCents / 100)}) deve ser maior que o valor recebido (${maskCurrencyFromNumber(entry.receivedInCents / 100)}).`;
 }
 
 function buildPayload(form) {
@@ -738,6 +752,7 @@ function SalaryEntriesEditor({ entries, salaryReceived, citationDate, onCitation
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [repeatFrom, setRepeatFrom] = useState("");
   const [repeatTo, setRepeatTo] = useState("");
+  const rowValues = useMemo(() => computeEntryValues(entries, salaryReceived), [entries, salaryReceived]);
   const addEntry = () => onChange([...entries, { competence: "", description: "Subsídio", adjustmentPercentage: "0", vacationPercentage: "" }]);
   const updateEntry = (index, field, value) => onChange(entries.map((entry, current) => current === index ? { ...entry, [field]: value } : entry));
   const removeEntry = (index) => onChange(entries.filter((_, current) => current !== index));
@@ -758,7 +773,7 @@ function SalaryEntriesEditor({ entries, salaryReceived, citationDate, onCitation
     <p className="section-description">Cadastre cada competência diretamente no sistema. Arraste pelo ícone para ordenar. O reajuste é aplicado aos valores-base; férias usa também o percentual informado. IPCA-E, poupança e Selic são buscados automaticamente.</p>
     <Field label="Data da citação" value={citationDate} onChange={onCitationDateChange} hint="Usada para iniciar a incidência dos juros de poupança." />
     <div className="salary-repeat"><Field label="Repetir competência de" value={repeatFrom} onChange={setRepeatFrom} /><Field label="até" value={repeatTo} onChange={setRepeatTo} /><button className="add-rule-button" type="button" onClick={repeatCompetences}>Gerar competências</button></div>
-    {entries.map((entry, index) => { const values = entryValues(entries, index, salaryReceived); return <div className={`salary-entry-row ${dragOverIndex === index && draggedIndex !== index ? "drop-target" : ""}`} key={index} onDragOver={(event) => { event.preventDefault(); setDragOverIndex(index); }} onDragLeave={() => setDragOverIndex(null)} onDrop={() => reorder(index)}>
+    {entries.map((entry, index) => { const values = rowValues[index]; return <div className={`salary-entry-row ${dragOverIndex === index && draggedIndex !== index ? "drop-target" : ""}`} key={index} onDragOver={(event) => { event.preventDefault(); setDragOverIndex(index); }} onDragLeave={() => setDragOverIndex(null)} onDrop={() => reorder(index)}>
       <div className="salary-entry-fields">
         <button className="drag-handle" type="button" draggable onDragStart={() => setDraggedIndex(index)} onDragEnd={() => { setDraggedIndex(null); setDragOverIndex(null); }} aria-label={`Reordenar lançamento ${index + 1}`}><GripVertical size={18} /></button>
         <Field label="Competência (MM/AAAA)" value={entry.competence} onChange={(value) => updateEntry(index, "competence", value)} />
@@ -774,20 +789,30 @@ function SalaryEntriesEditor({ entries, salaryReceived, citationDate, onCitation
   </div>;
 }
 
-function entryValues(entries, index, salaryReceived) {
-  const entry = entries[index];
-  const previous = index > 0 ? entryValues(entries, index - 1, salaryReceived) : null;
-  if (entry.description === "13º salário" && previous) return { ...previous, received: entry.receivedOverride ?? previous.received };
-  if (entry.description === "Adicional de férias" && previous) {
-    const vacation = (parseBrazilianNumber(entry.vacationPercentage) ?? 0) / 100;
-    return { due: maskCurrencyFromNumber((parseBrazilianNumber(previous.due) ?? 0) * vacation), received: entry.receivedOverride ?? maskCurrencyFromNumber((parseBrazilianNumber(previous.received) ?? 0) * vacation) };
+function computeEntryValues(entries, salaryReceived) {
+  const rowValues = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    const previous = index > 0 ? rowValues[index - 1] : null;
+    if (entry.description === "13º salário" && previous) {
+      rowValues.push({ ...previous, received: entry.receivedOverride ?? previous.received });
+      continue;
+    }
+    if (entry.description === "Adicional de férias" && previous) {
+      const vacation = (parseBrazilianNumber(entry.vacationPercentage) ?? 0) / 100;
+      rowValues.push({ due: entry.dueOverride ?? maskCurrencyFromNumber((parseBrazilianNumber(previous.due) ?? 0) * vacation), received: entry.receivedOverride ?? maskCurrencyFromNumber((parseBrazilianNumber(previous.received) ?? 0) * vacation) });
+      continue;
+    }
+    const adjustment = parseBrazilianNumber(entry.adjustmentPercentage || "0") ?? 0;
+    const received = parseBrazilianNumber(entry.receivedOverride ?? salaryReceived) ?? 0;
+    let previousSubsidy = null;
+    for (let current = index - 1; current >= 0; current -= 1) {
+      if (entries[current].description === "Subsídio") { previousSubsidy = rowValues[current]; break; }
+    }
+    const dueBase = previousSubsidy ? parseBrazilianNumber(previousSubsidy.due) ?? received : received;
+    rowValues.push({ due: entry.dueOverride ?? maskCurrencyFromNumber(dueBase * (1 + adjustment / 100)), received: entry.receivedOverride ?? maskCurrencyFromNumber(received) });
   }
-  const adjustment = parseBrazilianNumber(entry.adjustmentPercentage || "0") ?? 0;
-  const received = parseBrazilianNumber(entry.receivedOverride ?? salaryReceived) ?? 0;
-  const previousSubsidyIndex = entries.slice(0, index).map((item, current) => ({ item, current })).filter(({ item }) => item.description === "Subsídio").at(-1)?.current;
-  const previousSubsidy = previousSubsidyIndex == null ? null : entryValues(entries, previousSubsidyIndex, salaryReceived);
-  const dueBase = previousSubsidy ? parseBrazilianNumber(previousSubsidy.due) ?? received : received;
-  return { due: entry.dueOverride ?? maskCurrencyFromNumber(dueBase * (1 + adjustment / 100)), received: entry.receivedOverride ?? maskCurrencyFromNumber(received) };
+  return rowValues;
 }
 
 function competenceToMonth(value) {

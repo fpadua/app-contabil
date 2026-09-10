@@ -1,6 +1,7 @@
 export { sacSchedule, sacIndexedSchedule, priceSchedule, priceIndexedSchedule } from "./amortization.js";
 export { judicialTwoPhaseCorrection } from "./judicial.js";
 export { salaryDifferenceSchedule, detailedSalaryDifferenceSchedule } from "./salary.js";
+export { buildSalarySpreadsheetRows, calculateSalarySpreadsheet } from "./salary-spreadsheet.js";
 
 export function applyAccumulatedFactor(principalInCents, accumulatedFactor) {
   if (!Number.isInteger(principalInCents) || principalInCents <= 0) throw new TypeError("principalInCents must be a positive integer");
