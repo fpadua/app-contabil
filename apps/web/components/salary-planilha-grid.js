@@ -37,7 +37,6 @@ export function SalaryPlanilhaGrid({ sheet, evaluation, onChange, onRowAdd, onRo
           <th className="planilha-gutter planilha-gutter-head" scope="col" />
           <th className="planilha-kind-head" scope="col">Regra</th>
           {PLANILHA_COLUMNS.map((column) => <th className={column.role === "spacer" ? "planilha-spacer" : "planilha-col-head"} key={column.letter} scope="col">
-            <span className="planilha-letter">{column.letter}</span>
             {column.label && <span className="planilha-title">{column.label}</span>}
           </th>)}
           <th className="planilha-actions-head" scope="col">Ações</th>

@@ -135,7 +135,7 @@ export function SalaryPlanilha() {
 
       <div className="planilha-setup">
         <label className="field"><span>Título do cálculo</span><input onChange={(event) => update("title", event.target.value)} placeholder="Diferença salarial — planilha" value={sheet.title} /></label>
-        <label className="field"><span>Valor recebido base (D12)</span><input inputMode="numeric" onChange={(event) => update("baseReceived", maskPlanilhaCurrency(event.target.value))} placeholder="R$ 0,00" value={formatPlanilhaCurrencyInput(sheet.baseReceived)} /></label>
+        <label className="field"><span>Valor recebido base</span><input inputMode="numeric" onChange={(event) => update("baseReceived", maskPlanilhaCurrency(event.target.value))} placeholder="R$ 0,00" value={formatPlanilhaCurrencyInput(sheet.baseReceived)} /></label>
         <label className="field"><span>Data da citação</span><input inputMode="numeric" maxLength={10} onChange={(event) => update("citationDate", maskPlanilhaDate(event.target.value))} placeholder="DD/MM/AAAA" value={maskPlanilhaDate(sheet.citationDate)} /></label>
         <label className="field"><span>Indexador de referência</span><select onChange={(event) => update("indexSlug", event.target.value)} value={sheet.indexSlug}>
           {PLANILHA_INDEX_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -148,12 +148,6 @@ export function SalaryPlanilha() {
           <option value="">{linksUnavailable ? "Indisponível" : processes.isLoading ? "Carregando processos..." : "Sem vínculo"}</option>
           {visibleProcesses.map((process) => <option key={process.id} value={process.id}>{process.title}</option>)}
         </select></label>
-      </div>
-
-      <div className="planilha-legend">
-        <span className="planilha-legend-input">célula de entrada</span>
-        <span className="planilha-legend-formula">célula calculada</span>
-        <span className="planilha-legend-hint">As colunas A, F, H e K são digitadas; B, H e K recebem percentuais. C, D, E, G, I, J, L, M e O seguem a regra escolhida na coluna Regra.</span>
       </div>
 
       <div className="planilha-toolbar">

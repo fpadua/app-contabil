@@ -1,6 +1,6 @@
 import { PLANILHA_ROW_KINDS, buildSalaryPlanilhaSheet, findSalaryPlanilhaIssues } from "@contabil/calculation-engine";
 
-export const PLANILHA_FIRST_ROW_NUMBER = 12;
+export const PLANILHA_FIRST_ROW_NUMBER = 1;
 export const PLANILHA_STORAGE_KEY = "contabil:planilha:entrada";
 export const PLANILHA_RULE_ID = "REGRA-DIF-004";
 
@@ -43,7 +43,6 @@ export const PLANILHA_COLUMNS = [
   { key: "selic", letter: "K", label: "Taxa Selic", width: 84, role: "input", format: "percent" },
   { key: "selic", letter: "L", label: "Valor da Selic", width: 116, role: "formula", format: "currency" },
   { key: "total", letter: "M", label: "Valor da diferença corrigido com juros e selic", width: 128, role: "formula", format: "currency" },
-  { key: "spacer", letter: "N", label: "", width: 20, role: "spacer" },
   { key: "correctionOnly", letter: "O", label: "Valor da correção", width: 116, role: "formula", format: "currency" },
 ];
 

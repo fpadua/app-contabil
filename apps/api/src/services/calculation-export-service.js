@@ -46,7 +46,7 @@ export function buildCalculationPdfHtml(calculation, { issuedAt = new Date() } =
 <html lang="pt-BR"><head><meta charset="utf-8" />
 <title>Memória de cálculo — ${escapeHtml(calculation.title)}</title>
 <style>
-  @page { size: A4; margin: 0; }
+  @page { size: A4; margin: 14mm 12mm 18mm; }
   * { box-sizing: border-box; }
   body { margin: 0; padding: 0; color: #242422; font: 10.5px/1.45 Georgia, "Times New Roman", serif; }
   .sheet { padding: 28px 34px; }
@@ -57,6 +57,9 @@ export function buildCalculationPdfHtml(calculation, { issuedAt = new Date() } =
   h1 { margin: 22px 0 4px; font-size: 18px; }
   .subhead { margin: 0 0 18px; color: #777; font: 10px Arial, sans-serif; }
   table { width: 100%; border-collapse: collapse; }
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  tr { break-inside: avoid; }
   th, td { padding: 6px 8px; border: 1px solid #ddd; text-align: left; vertical-align: top; }
   th { background: #f6f3ee; font: 700 9px Arial, sans-serif; text-transform: uppercase; letter-spacing: .04em; }
   .key-col { width: 30%; color: #5c5853; }
@@ -67,7 +70,7 @@ export function buildCalculationPdfHtml(calculation, { issuedAt = new Date() } =
   .schedule th, .schedule td { padding: 4px 7px; }
   h2 { margin: 22px 0 10px; font: 700 13px Arial, sans-serif; }
   .muted { color: #888; }
-  footer { position: fixed; bottom: -14mm; left: 34px; right: 34px; border-top: 1px solid #eee; padding-top: 6px; font: 8px Arial, sans-serif; color: #999; display: flex; justify-content: space-between; }
+  footer { margin-top: 18px; border-top: 1px solid #eee; padding-top: 6px; font: 8px Arial, sans-serif; color: #999; display: flex; justify-content: space-between; }
 </style>
 </head>
 <body><div class="sheet">
@@ -120,11 +123,11 @@ function contentLines(calculation) {
   }
   const rows = (calculation.months ?? []).map((month) => ({
     competence: month.competence,
-    description: `Correção monetária — ${label}`,
-    amount: currencyBr(calculation.principalInCents),
-    factor: factorBr(month.factor),
-    accumulated: factorBr(month.accumulatedFactor),
-    corrected: currencyBr(month.correctedInCents),
+    description: month.description ?? `Correção monetária — ${label}`,
+    amount: currencyBr(month.differenceInCents ?? calculation.principalInCents),
+    factor: factorBr(month.factor ?? month.correctionFactor),
+    accumulated: month.accumulatedFactor == null ? "—" : factorBr(month.accumulatedFactor),
+    corrected: currencyBr(month.totalInCents ?? month.correctedInCents),
     kind: "months",
   }));
   return {
@@ -168,7 +171,7 @@ export async function exportCalculationPdf(calculation, { launchBrowser = (optio
     return await page.pdf({
       format: "A4",
       printBackground: true,
-      margin: { top: "14mm", right: "12mm", bottom: "16mm", left: "12mm" },
+      margin: { top: "14mm", right: "12mm", bottom: "18mm", left: "12mm" },
     });
   } finally {
     await browser.close();
@@ -176,11 +179,14 @@ export async function exportCalculationPdf(calculation, { launchBrowser = (optio
 }
 
 function currencyBr(cents) {
-  return Number(cents).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return (Number(cents) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 function factorBr(value) {
-  return Number(value).toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 6 });
+  const numeric = Number(value);
+  return Number.isFinite(numeric)
+    ? numeric.toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 6 })
+    : "—";
 }
 
 function dateStamp(value) {
