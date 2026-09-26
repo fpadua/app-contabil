@@ -10,7 +10,10 @@ const columns = [
 ];
 
 function competenceText(value) {
+  const brazilian = String(value).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (brazilian) return `${brazilian[2]}/${brazilian[3]}`;
   const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
   return `${String(date.getUTCMonth() + 1).padStart(2, "0")}/${date.getUTCFullYear()}`;
 }
 
