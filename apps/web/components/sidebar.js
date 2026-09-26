@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BriefcaseBusiness, Calculator, CircleHelp, FileText, Files, Home, Users } from "lucide-react";
+import { BarChart3, BriefcaseBusiness, Calculator, CircleHelp, FileText, Files, Home, Table2, Users } from "lucide-react";
 
 const navigation = [
   { label: "Painel", icon: Home, href: "/painel" },
   { label: "Novo cálculo", icon: Calculator, href: "/calculos/novo" },
+  { label: "Planilha", icon: Table2, href: "/planilha" },
   { label: "Cálculos", icon: Files, href: "/calculos" },
   { label: "Processos", icon: BriefcaseBusiness, href: "/processos" },
   { label: "Índices", icon: BarChart3, href: "/indices" },

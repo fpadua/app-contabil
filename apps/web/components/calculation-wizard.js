@@ -3,13 +3,14 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ArrowRight, Bookmark, Building2, CalendarDays, Calculator, ChartNoAxesColumnIncreasing, Check, Copy, Download, FileUp, GripVertical, Info, Landmark, Link2, Loader2, Plus, Scale, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bookmark, Building2, CalendarDays, Calculator, ChartNoAxesColumnIncreasing, Check, Copy, Download, FileUp, GripVertical, Info, Landmark, Link2, Loader2, Plus, Scale, Table2, Trash2, Users, X } from "lucide-react";
 import { Stepper } from "./stepper";
 import { SummaryCard } from "./summary-card";
 import { CalculationMemoryTable } from "./calculation-memory-table";
 import { CalculationAmortizationTable } from "./calculation-amortization-table";
 import { api } from "../lib/api";
 import { downloadCalculationCsv } from "../lib/calculation-export";
+import { PLANILHA_STORAGE_KEY, planilhaFromWizardForm } from "../lib/planilha";
 
 const calculationTypes = [
   { id: "monetary", label: "Correção monetária", description: "Atualização de valores por índices econômicos.", icon: ChartNoAxesColumnIncreasing },
@@ -119,6 +120,11 @@ export function CalculationWizard() {
     }
   }
 
+  function handleOpenPlanilha() {
+    window.sessionStorage.setItem(PLANILHA_STORAGE_KEY, JSON.stringify(planilhaFromWizardForm(form)));
+    router.push("/planilha");
+  }
+
   function handleSaveDraft() {
     setDraftError(null);
     const payload = draftPayload(form);
@@ -176,7 +182,7 @@ export function CalculationWizard() {
       <div className="content-grid">
         <div className="form-panel">
           {step === 1 && <TypeStep form={form} update={update} selectType={selectType} />}
-          {step === 2 && <DataStep form={form} update={update} selectedType={selectedType} importStatus={importStatus} importError={importError} onFile={handleImportFile} fileInputRef={fileInputRef} />}
+          {step === 2 && <DataStep form={form} update={update} selectedType={selectedType} importStatus={importStatus} importError={importError} onFile={handleImportFile} onOpenPlanilha={handleOpenPlanilha} fileInputRef={fileInputRef} />}
           {step === 3 && <RulesStep form={form} update={update} />}
           {step === 4 && <ResultStep form={form} result={result} />}
           <div className="source-warning"><Info size={17} /> Os índices e parâmetros utilizados ficam registrados com fonte, competência e versão.</div>
@@ -227,7 +233,7 @@ function BasicFields({ form, update }) {
   </div></div>;
 }
 
-function DataStep({ form, update, selectedType, importStatus, importError, onFile, fileInputRef }) {
+function DataStep({ form, update, selectedType, importStatus, importError, onFile, onOpenPlanilha, fileInputRef }) {
   const clients = useQuery({ queryKey: ["client-options"], queryFn: () => api.get("/api/clients/options") });
   const processes = useQuery({ queryKey: ["process-options"], queryFn: () => api.get("/api/processes/options") });
   const clientOptions = (clients.data ?? []).map((client) => ({ id: client.id, label: client.name }));
@@ -279,8 +285,12 @@ function DataStep({ form, update, selectedType, importStatus, importError, onFil
       <p className="section-description">O vínculo identifica a qual cliente e processo este cálculo pertence nos cadastros.</p>
     </div>
     <div className="import-zone">
-      <button className="import-button" type="button" onClick={() => fileInputRef.current?.click()}><FileUp size={18} /> Importar lançamentos de uma planilha</button>
+      <div className="import-actions-row">
+        <button className="import-button" type="button" onClick={() => fileInputRef.current?.click()}><FileUp size={18} /> Importar lançamentos de uma planilha</button>
+        {form.type === "salary" && <button className="import-button" type="button" onClick={onOpenPlanilha}><Table2 size={18} /> Abrir na planilha de cálculo</button>}
+      </div>
       <input ref={fileInputRef} hidden type="file" accept=".csv,text/csv" onChange={onFile} />
+      {form.type === "salary" && <p className="section-description">A planilha abre uma grade com as mesmas colunas da Plan 1: você preenche mês, índice de reajuste, atualização, juros e Selic, e os valores devido, recebido, diferença, juros e Selic são calculados automaticamente.</p>}
       {importStatus && <p className={`import-status ${importError ? "error" : ""}`} role={importError ? "alert" : "status"}>{importStatus}</p>}
     </div>
   </div>;

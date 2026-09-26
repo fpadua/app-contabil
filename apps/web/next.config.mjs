@@ -20,6 +20,7 @@ function originHost(origin) {
 const allowedOrigin = originHost(process.env.WEB_ORIGIN);
 const nextConfig = {
   reactStrictMode: true,
+  transpilePackages: ["@contabil/calculation-engine"],
   ...(allowedOrigin ? { allowedDevOrigins: [allowedOrigin] } : {}),
 };
 export default nextConfig;
