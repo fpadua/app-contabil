@@ -190,6 +190,7 @@ export default function IndicesPage() {
 
         {statusMessage && <div className={`module-status ${statusError ? "error" : ""}`} role="status">{statusMessage}</div>}
 
+        {indices.isLoading ? <IndicesSkeleton columns={columns} /> : <>
         <div className="stat-grid">
           <article className="stat-card"><span>Índices ativos</span><strong>{indices.data ? String(indices.data.length) : "—"}</strong><small>Séries monitoradas</small></article>
           <article className="stat-card"><span>Última verificação</span><strong>{indices.data ? "Agora" : "—"}</strong><small>Sincronização auditável</small></article>
@@ -218,6 +219,7 @@ export default function IndicesPage() {
           {rows && rows.length === 0 && <div className="empty-state"><Search size={28} /><strong>Nenhum registro encontrado</strong><span>Nenhum índice econômico disponível ainda.</span></div>}
           {!rows && <div className="empty-state"><Loader2 className="spinning" size={28} /><strong>Carregando índices...</strong><span>Consultando o banco de dados.</span></div>}
         </div>
+        </>}
       </section>
     </AppShell>
   );
@@ -244,6 +246,19 @@ export default function IndicesPage() {
       </div>
     );
   }
+}
+
+function IndicesSkeleton({ columns }) {
+  return <div className="module-page-skeleton indices-page-skeleton" aria-label="Carregando índices" role="status" aria-live="polite">
+    <div className="stat-grid">{Array.from({ length: 3 }, (_, index) => <span className="skeleton module-stat-skeleton" key={index} />)}</div>
+    <div className="data-card module-table-skeleton">
+      <div className="data-toolbar"><span className="skeleton skeleton-search" /><span className="skeleton skeleton-count" /></div>
+      <div className="table-scroll"><div className="data-table" style={{ "--columns": columns.map((column) => column.width ?? "1fr").join(" ") }}>
+        <div className="data-row data-head">{columns.map((column) => <span className="skeleton skeleton-header" key={column.key} />)}</div>
+        {Array.from({ length: 5 }, (_, row) => <div className="data-row" key={row}>{columns.map((column) => <span className="skeleton skeleton-cell" key={column.key} />)}</div>)}
+      </div></div>
+    </div>
+  </div>;
 }
 
 async function fetchIndices() {

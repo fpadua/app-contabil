@@ -53,7 +53,8 @@ export default function ProcessDetailPage() {
       <section className="workspace module-workspace">
         <Link className="record-back" href="/processos"><ArrowLeft size={16} /> Voltar para processos</Link>
 
-        {loadMessage(record, clients, calculations) && <div className="module-status" role="status">{loadMessage(record, clients, calculations)}</div>}
+        {record.isPending || clients.isPending || calculations.isPending ? <ProcessDetailSkeleton /> : null}
+        {(record.isError || clients.isError || calculations.isError) && <div className="module-status error" role="alert">Não foi possível carregar os dados. Verifique se a API está em execução.</div>}
 
         {process && <>
           <header className="module-header">
@@ -129,6 +130,14 @@ function statusTone(value) {
   if (normalized === "ativo" || normalized === "concluído") return "success";
   if (normalized === "inativo" || normalized === "rascunho" || normalized === "andamento" || normalized === "revisão") return "warning";
   return "neutral";
+}
+
+function ProcessDetailSkeleton() {
+  return <div className="calculation-detail-skeleton process-detail-skeleton" aria-label="Carregando processo" role="status" aria-live="polite">
+    <div className="calculation-detail-skeleton-header"><div><span className="skeleton skeleton-eyebrow" /><span className="skeleton skeleton-title" /><span className="skeleton skeleton-subtitle" /></div><div className="calculation-detail-skeleton-actions"><span className="skeleton skeleton-action" /><span className="skeleton skeleton-action" /></div></div>
+    <div className="calculation-detail-skeleton-stats"><span className="skeleton skeleton-stat" /><span className="skeleton skeleton-stat" /><span className="skeleton skeleton-stat" /></div>
+    <div className="calculation-detail-skeleton-content"><span className="skeleton skeleton-panel" /><span className="skeleton skeleton-panel skeleton-memory" /></div>
+  </div>;
 }
 
 function loadMessage(record, clients, calculations) {

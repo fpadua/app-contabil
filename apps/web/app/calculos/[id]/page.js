@@ -99,7 +99,8 @@ export default function CalculationDetailPage() {
       <section className="workspace module-workspace">
         <Link className="record-back" href="/calculos"><ArrowLeft size={16} /> Voltar para cálculos</Link>
 
-        {loadMessage(query) && <div className="module-status" role="status">{loadMessage(query)}</div>}
+        {query.isLoading && <CalculationDetailSkeleton />}
+        {query.isError && <div className="module-status error" role="alert">Não foi possível carregar este cálculo. O registro pode ter sido removido.</div>}
         {deleteError && <div className="module-status error" role="alert">Nao foi possivel excluir: {deleteError}</div>}
         {exportError && <div className="module-status error" role="alert">Não foi possível exportar: {exportError}</div>}
         {isDraft && <div className="module-status" role="status">Rascunho salvo sem resultado. Conclua o cálculo para gerar memória e exportações.</div>}
@@ -189,8 +190,27 @@ function reflectionText(calculation) {
   return items.join(" + ");
 }
 
-function loadMessage(query) {
-  if (query.isLoading) return "Carregando cálculo...";
-  if (query.isError) return "Não foi possível carregar este cálculo. O registro pode ter sido removido.";
-  return null;
+function CalculationDetailSkeleton() {
+  return <div className="calculation-detail-skeleton" aria-label="Carregando cálculo" role="status" aria-live="polite">
+    <div className="calculation-detail-skeleton-header">
+      <div>
+        <span className="skeleton skeleton-eyebrow" />
+        <span className="skeleton skeleton-title" />
+        <span className="skeleton skeleton-subtitle" />
+      </div>
+      <div className="calculation-detail-skeleton-actions">
+        <span className="skeleton skeleton-action" />
+        <span className="skeleton skeleton-action" />
+      </div>
+    </div>
+    <div className="calculation-detail-skeleton-stats">
+      <span className="skeleton skeleton-stat" />
+      <span className="skeleton skeleton-stat" />
+      <span className="skeleton skeleton-stat" />
+    </div>
+    <div className="calculation-detail-skeleton-content">
+      <span className="skeleton skeleton-panel" />
+      <span className="skeleton skeleton-panel skeleton-memory" />
+    </div>
+  </div>;
 }

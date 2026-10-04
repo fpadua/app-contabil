@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Download, Plus, RefreshCw, Search } from "lucide-react";
 
-export function ModulePage({ eyebrow, title, description, actionLabel, actionHref, columns, rows, stats = [], actionIcon = "plus", onAction, actionDisabled = false, statusMessage, rowHref }) {
+export function ModulePage({ eyebrow, title, description, actionLabel, actionHref, columns, rows, stats = [], actionIcon = "plus", onAction, actionDisabled = false, statusMessage, rowHref, loading = false }) {
   const [query, setQuery] = useState("");
   const filteredRows = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("pt-BR");
@@ -27,9 +27,10 @@ export function ModulePage({ eyebrow, title, description, actionLabel, actionHre
 
       {statusMessage && <div className="module-status" role="status">{statusMessage}</div>}
 
-      {stats.length > 0 && <div className="stat-grid">
-        {stats.map((stat) => <article className="stat-card" key={stat.label}><span>{stat.label}</span><strong>{stat.value}</strong><small>{stat.hint}</small></article>)}
-      </div>}
+      {loading ? <ModulePageSkeleton columns={columns} statsCount={stats.length || 3} /> : <>
+        {stats.length > 0 && <div className="stat-grid">
+          {stats.map((stat) => <article className="stat-card" key={stat.label}><span>{stat.label}</span><strong>{stat.value}</strong><small>{stat.hint}</small></article>)}
+        </div>}
 
       <div className="data-card">
         <div className="data-toolbar">
@@ -47,9 +48,23 @@ export function ModulePage({ eyebrow, title, description, actionLabel, actionHre
           </div>
         </div>
         {filteredRows.length === 0 && <div className="empty-state"><Search size={28} /><strong>Nenhum registro encontrado</strong><span>Tente outro termo de busca.</span></div>}
-      </div>
+        </div>
+      </>}
     </section>
   );
+}
+
+function ModulePageSkeleton({ columns, statsCount }) {
+  return <div className="module-page-skeleton" aria-label="Carregando dados" role="status" aria-live="polite">
+    <div className="stat-grid">{Array.from({ length: statsCount }, (_, index) => <span className="skeleton module-stat-skeleton" key={index} />)}</div>
+    <div className="data-card module-table-skeleton">
+      <div className="data-toolbar"><span className="skeleton skeleton-search" /><span className="skeleton skeleton-count" /></div>
+      <div className="table-scroll"><div className="data-table" style={{ "--columns": columns.map((column) => column.width ?? "1fr").join(" ") }}>
+        <div className="data-row data-head"><span className="skeleton skeleton-header" />{columns.slice(1).map((column) => <span className="skeleton skeleton-header" key={column.key} />)}</div>
+        {Array.from({ length: 5 }, (_, row) => <div className="data-row" key={row}>{columns.map((column) => <span className="skeleton skeleton-cell" key={column.key} />)}</div>)}
+      </div></div>
+    </div>
+  </div>;
 }
 
 function statusClass(value) {

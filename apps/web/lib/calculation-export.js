@@ -1,4 +1,4 @@
-import { downloadFile, formatCurrency, formatFactor, safeSlug } from "./api";
+import { downloadFile, formatCurrency, formatFactor, safeSlug } from "./api.js";
 
 const slugLabels = {
   ipca: "IPCA (IBGE)",
@@ -60,8 +60,8 @@ export function buildCalculationCsv(calculation) {
           month.competence,
           `Correção monetária — ${label}`,
           formatCurrency(calculation.principalInCents),
-          formatFactor(month.factor),
-          formatFactor(month.accumulatedFactor),
+          formatFactor(month.factor ?? month.correctionFactor),
+          formatFactor(month.accumulatedFactor ?? month.correctionFactor),
           formatCurrency(month.correctedInCents),
         ].join(";"),
       ),

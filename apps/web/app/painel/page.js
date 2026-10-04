@@ -21,6 +21,7 @@ export default function DashboardPage() {
 
   return <AppShell><section className="workspace module-workspace">
     <header className="module-header"><div><span className="module-eyebrow">VISÃO GERAL</span><h1>Olá, Fernando</h1><p>Acompanhe os cálculos, processos e índices econômicos.</p></div><Link className="primary-button module-action" href="/calculos/novo"><Calculator size={17} /> Novo cálculo</Link></header>
+    {calculations.isLoading || processes.isLoading || indices.isLoading ? <DashboardSkeleton /> : <>
     <div className="dashboard-cards">
       <Metric icon={Clock3} label="Em andamento" value={queryValue(calculations, inProgress)} detail={`${inProgress} aguardam conclusão`} />
       <Metric icon={CheckCircle2} label="Concluídos" value={queryValue(calculations, completed)} detail={`${monthCompleted} neste mês`} tone="green" />
@@ -36,7 +37,18 @@ export default function DashboardPage() {
         <Link className="text-link" href="/indices">Consultar histórico <ArrowRight size={15} /></Link>
       </aside>
     </div>
+    </>}
   </section></AppShell>;
+}
+
+function DashboardSkeleton() {
+  return <div className="dashboard-skeleton" aria-label="Carregando painel" role="status" aria-live="polite">
+    <div className="dashboard-cards">{Array.from({ length: 4 }, (_, index) => <span className="skeleton dashboard-metric-skeleton" key={index} />)}</div>
+    <div className="dashboard-grid">
+      <section className="data-card dashboard-panel-skeleton"><div className="card-heading"><span className="skeleton skeleton-heading" /><span className="skeleton skeleton-link" /></div>{Array.from({ length: 5 }, (_, index) => <div className="skeleton dashboard-list-skeleton" key={index} />)}</section>
+      <aside className="data-card dashboard-panel-skeleton"><div className="card-heading"><span className="skeleton skeleton-heading" /></div>{Array.from({ length: 5 }, (_, index) => <div className="skeleton dashboard-list-skeleton" key={index} />)}</aside>
+    </div>
+  </div>;
 }
 
 function RecentCalculation({ item }) {

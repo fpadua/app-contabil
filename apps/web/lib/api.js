@@ -43,7 +43,10 @@ export function formatCurrency(cents) {
 }
 
 export function formatFactor(value) {
-  return Number(value).toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 6 });
+  const numeric = Number(value);
+  return Number.isFinite(numeric)
+    ? numeric.toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 6 })
+    : "—";
 }
 
 export function safeSlug(value) {

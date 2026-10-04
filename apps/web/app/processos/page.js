@@ -29,7 +29,8 @@ export default function ProcessesPage() {
         columns={columns}
         rows={rows}
         rowHref={(row) => `/processos/${row.id}`}
-        statusMessage={loadMessage(query)}
+        loading={query.isPending}
+        statusMessage={query.isError ? loadMessage(query) : null}
         stats={stats}
       />
     </AppShell>

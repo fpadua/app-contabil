@@ -29,7 +29,8 @@ export default function ClientsPage() {
         columns={columns}
         rows={rows}
         rowHref={(row) => `/clientes/${row.id}`}
-        statusMessage={loadMessage(query)}
+        loading={query.isLoading}
+        statusMessage={query.isError ? loadMessage(query) : null}
         stats={stats}
       />
     </AppShell>
