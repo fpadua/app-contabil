@@ -24,6 +24,7 @@ import {
   incidenceIndexSlug,
   evaluatePlanilhaSheet,
   formatPlanilhaCurrencyInput,
+  maskPlanilhaCompetence,
   maskPlanilhaCurrency,
   maskPlanilhaDate,
 } from "../lib/planilha";
@@ -195,8 +196,8 @@ export function SalaryPlanilha() {
         <div className="planilha-rules-heading"><div><span className="planilha-rules-kicker">CONFIGURAÇÃO</span><h2>Regras de incidência</h2><p>Informe o índice e o período. O acumulado é calculado para cada lançamento conforme sua competência.</p></div><span className="planilha-rules-note">A Selic prevalece nos meses em que há taxa Selic publicada.</span></div>
         <div className="planilha-rule-form">
           <label className="field"><span>Índice</span><select value={incidenceDraft.index} onChange={(event) => setIncidenceDraft((current) => ({ ...current, index: event.target.value }))}><option value="ipca_e">IPCA-E</option><option value="selic">Selic</option><option value="juros">Juros moratórios (poupança)</option></select></label>
-          <label className="field"><span>Início (MM/AAAA)</span><input value={incidenceDraft.start} onChange={(event) => setIncidenceDraft((current) => ({ ...current, start: event.target.value }))} placeholder="07/2021" /></label>
-          <label className="field"><span>Fim (MM/AAAA)</span><input value={incidenceDraft.end} onChange={(event) => setIncidenceDraft((current) => ({ ...current, end: event.target.value }))} placeholder="10/2021" /></label>
+          <label className="field"><span>Início (MM/AAAA)</span><input inputMode="numeric" maxLength={7} value={maskPlanilhaCompetence(incidenceDraft.start)} onChange={(event) => setIncidenceDraft((current) => ({ ...current, start: maskPlanilhaCompetence(event.target.value) }))} placeholder="07/2021" /></label>
+          <label className="field"><span>Fim (MM/AAAA)</span><input inputMode="numeric" maxLength={7} value={maskPlanilhaCompetence(incidenceDraft.end)} onChange={(event) => setIncidenceDraft((current) => ({ ...current, end: maskPlanilhaCompetence(event.target.value) }))} placeholder="10/2021" /></label>
           <button className="add-rule-button" disabled={incidenceLoading} onClick={addIncidenceRule} type="button"><Plus size={16} /> {incidenceLoading ? "Calculando..." : "Adicionar regra"}</button>
         </div>
         <div className="planilha-rule-list">
@@ -305,7 +306,7 @@ function PlanilhaResults({ evaluation, resultRows, summaryRows }) {
 }
 
 function PlanilhaSummary({ evaluation, summaryRows }) {
-  return <section className="salary-result-summary" aria-label="Resumo do período">
+  return <section className="salary-result-summary planilha-summary" aria-label="Resumo do período">
     <strong>Resumo do período</strong>
     <div className="salary-result-summary-table">
       {summaryRows.map((row) => <div className={row.total ? "total" : ""} key={row.cell}>
