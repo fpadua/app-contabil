@@ -1,11 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Download, Plus, RefreshCw, Search } from "lucide-react";
 
 export function ModulePage({ eyebrow, title, description, actionLabel, actionHref, columns, rows, stats = [], actionIcon = "plus", onAction, actionDisabled = false, statusMessage, rowHref, loading = false }) {
   const [query, setQuery] = useState("");
+  const [displayLoading, setDisplayLoading] = useState(loading);
+  useEffect(() => {
+    if (loading) {
+      setDisplayLoading(true);
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => setDisplayLoading(false), 220);
+    return () => window.clearTimeout(timeout);
+  }, [loading]);
   const filteredRows = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("pt-BR");
     if (!normalized) return rows;
@@ -27,7 +36,7 @@ export function ModulePage({ eyebrow, title, description, actionLabel, actionHre
 
       {statusMessage && <div className="module-status" role="status">{statusMessage}</div>}
 
-      {loading ? <ModulePageSkeleton columns={columns} statsCount={stats.length || 3} /> : <>
+      {displayLoading ? <ModulePageSkeleton columns={columns} statsCount={stats.length || 3} /> : <>
         {stats.length > 0 && <div className="stat-grid">
           {stats.map((stat) => <article className="stat-card" key={stat.label}><span>{stat.label}</span><strong>{stat.value}</strong><small>{stat.hint}</small></article>)}
         </div>}

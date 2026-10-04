@@ -33,7 +33,8 @@ export default function CalculationsPage() {
         columns={columns}
         rows={rows}
         rowHref={(row) => `/calculos/${row.id}`}
-        statusMessage={loadMessage(query)}
+        loading={query.isPending}
+        statusMessage={query.isError ? loadMessage(query) : null}
         stats={calculationStats(query.data ?? [])}
       />
     </AppShell>
