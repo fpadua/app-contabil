@@ -1,4 +1,4 @@
-import { PLANILHA_ROW_KINDS, buildSalaryPlanilhaSheet, findSalaryPlanilhaIssues } from "@contabil/calculation-engine";
+import { PLANILHA_ROW_KINDS, accumulateSpreadsheetIndexFactors, buildSalaryPlanilhaSheet, findSalaryPlanilhaIssues } from "@contabil/calculation-engine";
 
 export const PLANILHA_FIRST_ROW_NUMBER = 1;
 export const PLANILHA_STORAGE_KEY = "contabil:planilha:entrada";
@@ -82,8 +82,150 @@ export function createPlanilhaSheet(overrides = {}) {
     indexSlug: "ipca_e",
     clientId: "",
     processId: "",
+    incidenceRules: [],
     rows: [createPlanilhaRow()],
     ...overrides,
+  };
+}
+
+export function createIncidenceRule(overrides = {}) {
+  return { id: `incidence-${Math.random().toString(36).slice(2, 9)}`, index: "ipca_e", start: "", end: "", ...overrides };
+}
+
+export function incidenceIndexSlug(index) {
+  return index === "juros" ? "poupanca" : index;
+}
+
+function monthNumber(value) {
+  const match = String(value ?? "").match(/^(0[1-9]|1[0-2])\/(\d{4})$/);
+  return match ? Number(match[2]) * 12 + Number(match[1]) - 1 : null;
+}
+
+function monthLabel(month) {
+  return `${String(month % 12 + 1).padStart(2, "0")}/${Math.floor(month / 12)}`;
+}
+
+function monthlyRates(values) {
+  return new Map((values ?? []).filter((item) => item.published !== false).map((item) => {
+    const date = new Date(item.referenceDate);
+    if (Number.isNaN(date.getTime())) return [null, null];
+    return [date.getUTCFullYear() * 12 + date.getUTCMonth(), item.monthlyValue == null ? null : Number(item.monthlyValue)];
+  }).filter(([month, rate]) => month !== null && Number.isFinite(rate)));
+}
+
+function ruleMonths(rule, values) {
+  const start = monthNumber(rule.start);
+  const end = monthNumber(rule.end);
+  if (start === null || end === null || end < start) throw new Error("Informe início e fim válidos no formato MM/AAAA.");
+  const rates = monthlyRates(values);
+  const first = rule.index === "ipca_e" ? start : start + 1;
+  const months = [];
+  for (let month = first; month <= end; month += 1) {
+    // A Selic é lançada na competência seguinte à da taxa publicada; juros
+    // moratórios seguem a competência mensal da série de poupança.
+    const sourceMonth = rule.index === "selic" ? month - 1 : month;
+    if (!rates.has(sourceMonth)) throw new Error(`Índice ${incidenceIndexSlug(rule.index)} não publicado em ${monthLabel(sourceMonth)}.`);
+    const sourceRate = rates.get(sourceMonth);
+    // Na série de referência, dez/2021 é a competência-base do IPCA-E; a
+    // taxa publicada nesse mês pertence à competência seguinte e não entra.
+    const rate = rule.index === "ipca_e" && month === monthNumber("12/2021") ? 0 : sourceRate;
+    months.push({ month, sourceMonth, sourceRate, rate, index: rule.index });
+  }
+  return months;
+}
+
+function sumRates(months) {
+  return Math.round(months.reduce((sum, month) => sum + month.rate, 0) * 1_000_000) / 1_000_000;
+}
+
+function compoundRates(months) {
+  if (!months.length) return 1;
+  return accumulateSpreadsheetIndexFactors(months.map(({ month, rate }) => ({
+    referenceDate: `${Math.floor(month / 12)}-${String(month % 12 + 1).padStart(2, "0")}-01`,
+    factor: 1 + rate / 100,
+  }))).accumulatedFactor;
+}
+
+export function calculateIncidenceFactor(values, start, end, index = "ipca_e") {
+  const rule = { index, start, end };
+  const months = ruleMonths(rule, values);
+  return index === "ipca_e" ? compoundRates(months) : sumRates(months);
+}
+
+export function calculateIncidenceBreakdown(rule, values, rules = [], indexValues = {}) {
+  const months = ruleMonths(rule, values);
+  const selicMonths = new Set();
+  for (const other of rules) {
+    if (other.index !== "selic") continue;
+    for (const month of ruleMonths(other, indexValues.selic ?? values)) selicMonths.add(month.month);
+  }
+  const effectiveMonths = months.map((month) => ({
+    ...month,
+    overridden: rule.index !== "selic" && selicMonths.has(month.month),
+    appliedRate: rule.index !== "selic" && selicMonths.has(month.month) ? 0 : month.rate,
+  }));
+  if (rule.index === "ipca_e") {
+    let factor = 1;
+    const rows = [...effectiveMonths].reverse().map((month) => {
+      factor = Math.round(factor * (1 + month.appliedRate / 100) * 1_000_000) / 1_000_000;
+      return { ...month, accumulated: factor };
+    }).reverse();
+    return { accumulated: compoundRates(effectiveMonths.map((month) => ({ ...month, rate: month.appliedRate }))), rows };
+  }
+  const accumulated = sumRates(effectiveMonths.map((month) => ({ ...month, rate: month.appliedRate })));
+  let remaining = accumulated;
+  const rows = [{ month: monthNumber(rule.start), sourceMonth: null, sourceRate: null, appliedRate: null, accumulated: remaining, base: true }];
+  for (const month of effectiveMonths) {
+    remaining = Math.round((remaining - month.appliedRate) * 1_000_000) / 1_000_000;
+    rows.push({ ...month, accumulated: remaining });
+  }
+  return { accumulated, rows };
+}
+
+export function applyIncidenceRules(sheet, indexValues) {
+  const rules = sheet.incidenceRules ?? [];
+  if (!rules.length) return sheet;
+  const series = rules.map((rule) => ruleMonths(rule, indexValues[incidenceIndexSlug(rule.index)]));
+  return {
+    ...sheet,
+    rows: sheet.rows.map((row, position) => {
+      const competence = monthNumber(competenceOfRow(sheet, position));
+      if (competence === null) return row;
+      const correctionByMonth = new Map();
+      const interestByMonth = new Map();
+      const selicByMonth = new Map();
+      rules.forEach((rule, ruleIndex) => {
+        for (const month of series[ruleIndex]) {
+          if (month.month < competence || (rule.index !== "ipca_e" && month.month === competence)) continue;
+          if (rule.index === "selic") selicByMonth.set(month.month, month);
+          else if (rule.index === "ipca_e") correctionByMonth.set(month.month, month);
+          else interestByMonth.set(month.month, month);
+        }
+      });
+      const correctionMonths = [...correctionByMonth.values()].filter((month) => !selicByMonth.has(month.month));
+      const interestMonths = [...interestByMonth.values()].filter((month) => !selicByMonth.has(month.month));
+      const selicMonths = [...selicByMonth.values()];
+      const correction = compoundRates(correctionMonths);
+      const interest = sumRates(interestMonths);
+      const selic = sumRates(selicMonths);
+      const accumulated = [
+        correctionMonths.length ? `IPCA-E ${correction.toFixed(6).replace(".", ",")}` : null,
+        interestMonths.length ? `Juros ${interest.toFixed(4).replace(".", ",")}%` : null,
+        selicMonths.length ? `Selic ${selic.toFixed(2).replace(".", ",")}%` : null,
+      ].filter(Boolean).join(" · ");
+      return {
+        ...row,
+        correction: correctionMonths.length || selicMonths.length ? correction.toFixed(6).replace(".", ",") : row.correction,
+        interest: interestMonths.length || selicMonths.length ? `${interest.toFixed(4).replace(".", ",")}%` : row.interest,
+        selic: selicMonths.length ? `${selic.toFixed(2).replace(".", ",")}%` : row.selic,
+        accumulated,
+        incidenceLocked: {
+          correction: correctionMonths.length > 0 || selicMonths.length > 0,
+          interest: interestMonths.length > 0 || selicMonths.length > 0,
+          selic: selicMonths.length > 0,
+        },
+      };
+    }),
   };
 }
 
@@ -148,6 +290,12 @@ export function maskPlanilhaCompetence(value) {
   const text = String(value ?? "");
   if (/[^\d/\s]/.test(text)) return text;
   return text.replace(/\D/g, "").slice(0, 6).replace(/^(\d{2})(\d)/, "$1/$2");
+}
+
+export function planilhaCompetenceCursorPosition(value, position) {
+  const text = String(value ?? "");
+  const rawPosition = Math.max(0, Math.min(Number(position) || 0, text.length));
+  return maskPlanilhaCompetence(text.slice(0, rawPosition)).length;
 }
 
 export function maskPlanilhaDecimal(value, { percent = false, pad = false } = {}) {
@@ -229,7 +377,7 @@ function competenceToIso(competence, fallbackDay) {
   return `${year}-${month}-${String(fallbackDay || lastDay).padStart(2, "0")}`;
 }
 
-export function buildPlanilhaResult({ sheet, evaluation }) {
+export function buildPlanilhaResult({ sheet, sourceSheet = sheet, evaluation }) {
   const period = planilhaPeriod(sheet);
   const principalInCents = toCents(evaluation.difference);
   const correctedInCents = toCents(evaluation.payable);
@@ -269,10 +417,11 @@ export function buildPlanilhaResult({ sheet, evaluation }) {
         selicInCents: toCents(evaluation.totals.selic),
       },
       sheet: {
-        baseReceived: sheet.baseReceived,
-        citationDate: sheet.citationDate || null,
-        indexSlug: sheet.indexSlug,
-        rows: sheet.rows.map(({ id, ...row }) => row),
+        baseReceived: sourceSheet.baseReceived,
+        citationDate: sourceSheet.citationDate || null,
+        indexSlug: sourceSheet.indexSlug,
+        incidenceRules: sourceSheet.incidenceRules ?? [],
+        rows: sourceSheet.rows.map(({ id, ...row }) => row),
       },
     },
   };

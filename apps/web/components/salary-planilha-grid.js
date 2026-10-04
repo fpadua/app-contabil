@@ -1,7 +1,8 @@
 "use client";
 
-import { Copy, Plus, Trash2 } from "lucide-react";
-import { PLANILHA_COLUMNS, PLANILHA_ROW_KIND_OPTIONS, formatPlanilhaCell, maskPlanilhaCompetence, maskPlanilhaDecimal, rowNumberAt } from "../lib/planilha";
+import { Copy, Trash2 } from "lucide-react";
+import { useLayoutEffect, useRef } from "react";
+import { PLANILHA_COLUMNS, PLANILHA_ROW_KIND_OPTIONS, formatPlanilhaCell, maskPlanilhaCompetence, maskPlanilhaDecimal, planilhaCompetenceCursorPosition, rowNumberAt } from "../lib/planilha";
 
 const GUTTER_WIDTH = 40;
 const KIND_WIDTH = 132;
@@ -25,7 +26,7 @@ function rowKindHint(kind) {
  * resultado. A coluna Regra é o único acréscimo: ela escolhe qual fórmula
  * fechada de C e D a linha usa, já que a fórmula em si não aparece.
  */
-export function SalaryPlanilhaGrid({ sheet, evaluation, onChange, onRowAdd, onRowDuplicate, onRowRemove, readOnly = false }) {
+export function SalaryPlanilhaGrid({ sheet, appliedRows = sheet.rows, evaluation, onChange, onRowDuplicate, onRowRemove, readOnly = false }) {
   const updateRow = (index, field, value) => {
     onChange(sheet.rows.map((row, current) => (current === index ? { ...row, [field]: value } : row)));
   };
@@ -61,14 +62,13 @@ export function SalaryPlanilhaGrid({ sheet, evaluation, onChange, onRowAdd, onRo
             {PLANILHA_COLUMNS.map((column) => <Cell
               cell={evaluation.rows[index]}
               column={column}
-              disabled={readOnly}
+              disabled={readOnly || Boolean(appliedRows[index]?.incidenceLocked?.[column.key])}
               key={column.letter}
               onChange={(value) => updateRow(index, column.key, value)}
-              row={row}
+              row={appliedRows[index] ?? row}
               rowNumber={rowNumber}
             />)}
             <td className="planilha-actions">
-              <button aria-label={`Adicionar linha abaixo de ${rowNumber}`} disabled={readOnly} onClick={() => onRowAdd(index)} type="button"><Plus size={15} /></button>
               <button aria-label={`Duplicar linha ${rowNumber}`} disabled={readOnly} onClick={() => onRowDuplicate(index)} type="button"><Copy size={15} /></button>
               <button aria-label={`Remover linha ${rowNumber}`} className="planilha-remove" disabled={readOnly || sheet.rows.length === 1} onClick={() => onRowRemove(index)} type="button"><Trash2 size={15} /></button>
             </td>
@@ -90,19 +90,47 @@ export function SalaryPlanilhaGrid({ sheet, evaluation, onChange, onRowAdd, onRo
 }
 
 function Cell({ column, row, cell, rowNumber, disabled, onChange }) {
+  const inputRef = useRef(null);
+  const cursorPositionRef = useRef(null);
   const mask = (value, pad = false) => column.key === "label"
     ? maskPlanilhaCompetence(value)
     : maskPlanilhaDecimal(value, { percent: column.format === "percent", pad });
+  const maskedValue = mask(row[column.key]);
+
+  useLayoutEffect(() => {
+    const cursor = cursorPositionRef.current;
+    const input = inputRef.current;
+    if (cursor == null) return;
+    if (!input || document.activeElement !== input) {
+      cursorPositionRef.current = null;
+      return;
+    }
+    input.setSelectionRange(cursor, cursor);
+    cursorPositionRef.current = null;
+  });
+
+  const handleKeyDown = (event) => {
+    if (column.key !== "label" || event.key.length !== 1 || !/\d/.test(event.key)) return;
+    const input = event.currentTarget;
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    if (start !== end) return;
+
+    const nextInput = `${input.value.slice(0, start)}${event.key}${input.value.slice(end)}`;
+    cursorPositionRef.current = planilhaCompetenceCursorPosition(nextInput, start + 1);
+    onChange(mask(nextInput));
+    event.preventDefault();
+  };
 
   const handleChange = (event) => {
     const input = event.target;
     const position = input.selectionStart;
     const value = mask(input.value);
-    const cursor = Math.min(position, value.endsWith("%") ? value.length - 1 : value.length);
+    const cursor = column.key === "label"
+      ? planilhaCompetenceCursorPosition(input.value, position)
+      : Math.min(position, value.endsWith("%") ? value.length - 1 : value.length);
+    cursorPositionRef.current = cursor;
     onChange(value);
-    requestAnimationFrame(() => {
-      if (document.activeElement === input) input.setSelectionRange(cursor, cursor);
-    });
   };
   if (column.role === "spacer") return <td className="planilha-spacer" />;
 
@@ -117,10 +145,12 @@ function Cell({ column, row, cell, rowNumber, disabled, onChange }) {
       aria-label={`${column.label} — linha ${rowNumber}`}
       disabled={disabled}
       inputMode={column.key === "label" ? "text" : "decimal"}
+      onKeyDown={handleKeyDown}
       onChange={handleChange}
       onBlur={(event) => onChange(mask(event.target.value, true))}
       placeholder={inputPlaceholder(column, row.kind)}
-      value={mask(row[column.key])}
+      ref={inputRef}
+      value={maskedValue}
     />
   </td>;
 }

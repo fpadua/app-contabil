@@ -1,9 +1,9 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, Check, FileDown, Info, Loader2, Plus, Save, Table2, Wand2 } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronUp, FileDown, Info, Loader2, Plus, Save, Table2, X } from "lucide-react";
 import { SalaryPlanilhaGrid } from "./salary-planilha-grid";
 import { api, formatCurrency } from "../lib/api";
 import { downloadCalculationCsv } from "../lib/calculation-export";
@@ -17,6 +17,11 @@ import {
   buildPlanilhaSummaryRows,
   createPlanilhaRow,
   createPlanilhaSheet,
+  createIncidenceRule,
+  applyIncidenceRules,
+  calculateIncidenceBreakdown,
+  calculateIncidenceFactor,
+  incidenceIndexSlug,
   evaluatePlanilhaSheet,
   formatPlanilhaCurrencyInput,
   maskPlanilhaCurrency,
@@ -25,24 +30,67 @@ import {
 
 export function SalaryPlanilha() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const calculationId = searchParams.get("calculo");
   const [sheet, setSheet] = useState(createPlanilhaSheet);
   const [status, setStatus] = useState(null);
   const [issues, setIssues] = useState([]);
+  const [incidenceDraft, setIncidenceDraft] = useState(createIncidenceRule);
+  const [expandedRules, setExpandedRules] = useState(() => new Set());
 
   const clients = useQuery({ queryKey: ["client-options"], queryFn: () => api.get("/api/clients/options") });
   const processes = useQuery({ queryKey: ["process-options"], queryFn: () => api.get("/api/processes/options") });
   const saved = useQuery({ queryKey: ["calculation", calculationId], queryFn: () => api.get(`/api/calculations/${calculationId}`), enabled: Boolean(calculationId) });
   const linksUnavailable = clients.isError || processes.isError;
+  const incidenceSlugs = [...new Set((sheet.incidenceRules ?? []).map((rule) => incidenceIndexSlug(rule.index)))];
+  const incidenceQueries = useQueries({ queries: incidenceSlugs.map((slug) => ({
+    queryKey: ["economic-index", slug],
+    queryFn: () => api.get(`/api/indices/${slug}`),
+  })) });
+  const incidenceReady = incidenceQueries.every((query) => query.isSuccess);
+  const incidenceError = incidenceQueries.find((query) => query.isError)?.error;
+  const indexValues = Object.fromEntries(incidenceSlugs.map((slug, index) => [slug, incidenceQueries[index]?.data?.values]));
+  let appliedSheet = sheet;
+  let ruleError = incidenceError;
+  if (incidenceReady) {
+    try {
+      appliedSheet = applyIncidenceRules(sheet, indexValues);
+    } catch (error) {
+      ruleError = error;
+    }
+  }
 
-  const evaluation = useMemo(() => evaluatePlanilhaSheet(sheet), [sheet]);
+  const evaluation = useMemo(() => evaluatePlanilhaSheet(appliedSheet), [appliedSheet]);
   const summaryRows = useMemo(() => buildPlanilhaSummaryRows(evaluation), [evaluation]);
-  const resultRows = useMemo(() => buildPlanilhaResultRows({ sheet, evaluation }), [sheet, evaluation]);
+  const resultRows = useMemo(() => buildPlanilhaResultRows({ sheet: appliedSheet, evaluation }), [appliedSheet, evaluation]);
 
   const update = (field, value) => setSheet((current) => ({ ...current, [field]: value }));
+  const [incidenceLoading, setIncidenceLoading] = useState(false);
+  const addIncidenceRule = async () => {
+    setIncidenceLoading(true);
+    try {
+      const slug = incidenceIndexSlug(incidenceDraft.index);
+      const detail = await queryClient.fetchQuery({ queryKey: ["economic-index", slug], queryFn: () => api.get(`/api/indices/${slug}`) });
+      const accumulated = calculateIncidenceFactor(detail.values, incidenceDraft.start, incidenceDraft.end, incidenceDraft.index);
+      const next = createIncidenceRule({ index: incidenceDraft.index, start: incidenceDraft.start, end: incidenceDraft.end });
+      setSheet((current) => ({ ...current, incidenceRules: [...(current.incidenceRules ?? []), next] }));
+      setIncidenceDraft(createIncidenceRule());
+      setStatus(`Regra adicionada. Acumulado do período: ${formatIncidenceAccumulated(accumulated, next.index)}. As taxas acompanham a competência de cada linha.`);
+    } catch (error) {
+      setStatus(error.message);
+    } finally {
+      setIncidenceLoading(false);
+    }
+  };
+  const removeIncidenceRule = (id) => update("incidenceRules", (sheet.incidenceRules ?? []).filter((rule) => rule.id !== id));
+  const toggleRuleDetails = (id) => setExpandedRules((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
   const setRows = (rows) => setSheet((current) => ({ ...current, rows }));
-  const addRow = (index) => setRows([...sheet.rows.slice(0, index + 1), createPlanilhaRow({ kind: sheet.rows[index]?.kind }), ...sheet.rows.slice(index + 1)]);
   const duplicateRow = (index) => setRows([...sheet.rows.slice(0, index + 1), { ...sheet.rows[index], id: createPlanilhaRow().id }, ...sheet.rows.slice(index + 1)]);
   const removeRow = (index) => setRows(sheet.rows.filter((_, current) => current !== index));
 
@@ -71,19 +119,11 @@ export function SalaryPlanilha() {
     }));
   }, [saved.data]);
 
-  function applyIndexesToAll() {
-    const [first] = sheet.rows;
-    if (!first) return;
-    setRows(sheet.rows.map((row) => ({
-      ...row,
-      correction: row.correction || first.correction,
-      interest: row.interest || first.interest,
-      selic: row.selic || first.selic,
-    })));
-    setStatus("Índice de atualização, juros e Selic da primeira linha aplicados às linhas ainda vazias.");
-  }
-
   function buildSavePayload() {
+    if (!incidenceReady || ruleError) {
+      setStatus(ruleError?.message ?? "Aguarde a consulta dos índices para salvar a planilha.");
+      return null;
+    }
     if (evaluation.issues.length) {
       setIssues(evaluation.issues);
       return null;
@@ -94,7 +134,7 @@ export function SalaryPlanilha() {
       calculationType: "Diferença salarial",
       ...(sheet.clientId ? { clientId: sheet.clientId } : {}),
       ...(sheet.processId ? { processId: sheet.processId } : {}),
-      result: buildPlanilhaResult({ sheet, evaluation }),
+      result: buildPlanilhaResult({ sheet: appliedSheet, sourceSheet: sheet, evaluation }),
     };
   }
 
@@ -129,6 +169,7 @@ export function SalaryPlanilha() {
       </header>
 
       {status && <div className="module-status" role="status"><Info size={15} /> {status}</div>}
+      {(ruleError || !incidenceReady) && sheet.incidenceRules.length > 0 && <div className={`module-status${ruleError ? " error" : ""}`} role={ruleError ? "alert" : "status"}>{ruleError?.message ?? "Consultando índices das regras de incidência..."}</div>}
       {saved.isError && <div className="module-status error" role="alert">Não foi possível abrir o cálculo informado.</div>}
       {linksUnavailable && <div className="module-status" role="status">Não foi possível consultar clientes e processos. Verifique se a API está em execução — o cálculo da planilha e o salvamento continuam disponíveis, mas o vínculo fica indisponível.</div>}
       <PlanilhaIssues issues={issues} />
@@ -150,19 +191,62 @@ export function SalaryPlanilha() {
         </select></label>
       </div>
 
+      <section className="planilha-rules" aria-label="Regras de incidência">
+        <div className="planilha-rules-heading"><div><span className="planilha-rules-kicker">CONFIGURAÇÃO</span><h2>Regras de incidência</h2><p>Informe o índice e o período. O acumulado é calculado para cada lançamento conforme sua competência.</p></div><span className="planilha-rules-note">A Selic prevalece nos meses em que há taxa Selic publicada.</span></div>
+        <div className="planilha-rule-form">
+          <label className="field"><span>Índice</span><select value={incidenceDraft.index} onChange={(event) => setIncidenceDraft((current) => ({ ...current, index: event.target.value }))}><option value="ipca_e">IPCA-E</option><option value="selic">Selic</option><option value="juros">Juros moratórios (poupança)</option></select></label>
+          <label className="field"><span>Início (MM/AAAA)</span><input value={incidenceDraft.start} onChange={(event) => setIncidenceDraft((current) => ({ ...current, start: event.target.value }))} placeholder="07/2021" /></label>
+          <label className="field"><span>Fim (MM/AAAA)</span><input value={incidenceDraft.end} onChange={(event) => setIncidenceDraft((current) => ({ ...current, end: event.target.value }))} placeholder="10/2021" /></label>
+          <button className="add-rule-button" disabled={incidenceLoading} onClick={addIncidenceRule} type="button"><Plus size={16} /> {incidenceLoading ? "Calculando..." : "Adicionar regra"}</button>
+        </div>
+        <div className="planilha-rule-list">
+          {(sheet.incidenceRules ?? []).map((rule) => {
+            const expanded = expandedRules.has(rule.id);
+            const detailId = `incidence-detail-${rule.id}`;
+            const values = indexValues[incidenceIndexSlug(rule.index)];
+            let breakdown = null;
+            try {
+              if (values) breakdown = calculateIncidenceBreakdown(rule, values, sheet.incidenceRules, indexValues);
+            } catch {
+              breakdown = null;
+            }
+            return <article className={`planilha-rule-card${expanded ? " expanded" : ""}`} key={rule.id}>
+              <button aria-controls={detailId} aria-expanded={expanded} className="planilha-rule-card-toggle" onClick={() => toggleRuleDetails(rule.id)} type="button">
+                <span className="planilha-rule-card-main"><span className={`planilha-rule-badge ${rule.index}`}>{incidenceLabel(rule.index)}</span><strong>{rule.start} <span aria-hidden="true">→</span> {rule.end}</strong></span>
+                <span className="planilha-rule-card-result"><span>Acumulado do período</span><strong>{formatRuleSummary(rule, indexValues, sheet.incidenceRules)}</strong></span>
+                <span className="planilha-rule-card-chevron" aria-hidden="true">{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
+              </button>
+              <button aria-label={`Remover regra ${incidenceLabel(rule.index)} de ${rule.start} a ${rule.end}`} className="planilha-rule-card-remove" onClick={() => removeIncidenceRule(rule.id)} type="button"><X size={16} /></button>
+              {expanded && <div className="planilha-rule-detail" id={detailId}>
+                <div className="planilha-rule-detail-heading"><strong>Conferência mensal</strong><span>{rule.start} a {rule.end} · valores consultados no índice cadastrado</span></div>
+                {breakdown ? <div className="planilha-rule-detail-scroll"><table><thead><tr><th>Competência</th><th>Mês da taxa</th><th>Taxa publicada</th><th>Taxa aplicada</th><th>Acumulado restante</th><th>Aplicação</th></tr></thead><tbody>
+                  {breakdown.rows.map((row) => <tr key={`${rule.id}-${row.month}`}>
+                    <td>{formatMonthNumber(row.month)}</td><td>{row.sourceMonth == null ? "—" : formatMonthNumber(row.sourceMonth)}</td>
+                    <td>{row.sourceRate == null ? "—" : formatRuleRate(row.sourceRate, rule.index)}</td>
+                    <td>{row.appliedRate == null ? "—" : formatRuleRate(row.appliedRate, rule.index)}</td>
+                    <td>{formatIncidenceAccumulated(row.accumulated, rule.index)}</td>
+                    <td>{row.base ? "Mês-base" : row.overridden ? "Selic prevaleceu" : "Incluída"}</td>
+                  </tr>)}
+                </tbody></table></div> : <div className="planilha-rule-detail-loading">Consultando ou validando os índices deste período…</div>}
+              </div>}
+            </article>;
+          })}
+          {(sheet.incidenceRules ?? []).length === 0 && <div className="planilha-rules-empty">Nenhuma regra adicionada. Escolha um índice e um período para calcular as taxas.</div>}
+        </div>
+      </section>
+
       <div className="planilha-toolbar">
         <button className="add-rule-button" onClick={() => setRows([...sheet.rows, createPlanilhaRow()])} type="button"><Plus size={16} /> Adicionar linha</button>
-        <button className="add-rule-button" onClick={applyIndexesToAll} type="button"><Wand2 size={16} /> Aplicar índices da 1ª linha</button>
         <span className="planilha-toolbar-info">{sheet.rows.length} lançamento(s) · {PLANILHA_RULE_ID}</span>
       </div>
 
       <SalaryPlanilhaGrid
         evaluation={evaluation}
         onChange={setRows}
-        onRowAdd={addRow}
         onRowDuplicate={duplicateRow}
         onRowRemove={removeRow}
         sheet={sheet}
+        appliedRows={appliedSheet.rows}
       />
 
       <PlanilhaResults evaluation={evaluation} resultRows={resultRows} summaryRows={summaryRows} />
@@ -225,14 +309,45 @@ function PlanilhaSummary({ evaluation, summaryRows }) {
     <strong>Resumo do período</strong>
     <div className="salary-result-summary-table">
       {summaryRows.map((row) => <div className={row.total ? "total" : ""} key={row.cell}>
-        <span>{row.cell}</span><b>{row.label}</b><strong>{formatCurrency(toCents(row.value))}</strong>
+        <b>{row.label}</b><strong>{formatCurrency(toCents(row.value))}</strong>
       </div>)}
-      <div><span>I30</span><b>SALDO CORRIGIDO DAS DIFERENÇAS (soma da coluna M)</b><strong>{formatCurrency(toCents(evaluation.sheetTotal))}</strong></div>
-      <div><span>N38</span><b>CONFERÊNCIA (I38 − I30)</b><strong>{formatCurrency(toCents(evaluation.check))}</strong></div>
+       <div><b>SALDO CORRIGIDO DAS DIFERENÇAS</b><strong>{formatCurrency(toCents(evaluation.sheetTotal))}</strong></div>
+       <div><b>CONFERÊNCIA</b><strong>{formatCurrency(toCents(evaluation.check))}</strong></div>
     </div>
   </section>;
 }
 
 function toCents(value) {
   return Math.round(Number(value ?? 0) * 100);
+}
+
+function formatIncidenceAccumulated(value, index) {
+  return index === "ipca_e"
+    ? value.toLocaleString("pt-BR", { minimumFractionDigits: 6, maximumFractionDigits: 6 })
+    : `${value.toLocaleString("pt-BR", { minimumFractionDigits: index === "selic" ? 2 : 4, maximumFractionDigits: 6 })}%`;
+}
+
+function formatRuleSummary(rule, indexValues, rules) {
+  const values = indexValues[incidenceIndexSlug(rule.index)];
+  if (!values) return "consultando índices...";
+  try {
+    return formatIncidenceAccumulated(calculateIncidenceBreakdown(rule, values, rules, indexValues).accumulated, rule.index);
+  } catch {
+    return "índices indisponíveis";
+  }
+}
+
+function formatMonthNumber(month) {
+  return `${String(month % 12 + 1).padStart(2, "0")}/${Math.floor(month / 12)}`;
+}
+
+function formatRuleRate(value, index) {
+  const digits = index === "selic" ? 2 : 4;
+  return `${Number(value).toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits })}%`;
+}
+
+function incidenceLabel(index) {
+  if (index === "ipca_e") return "IPCA-E";
+  if (index === "juros") return "POUPANÇA";
+  return "SELIC";
 }

@@ -11,7 +11,17 @@ import { documentRoutes } from "./routes/documents.js";
 
 const app = Fastify({ logger: true });
 await app.register(cors, {
-  origin: process.env.WEB_ORIGIN ?? "http://localhost:3000",
+  origin: (origin, callback) => {
+    const allowedOrigins = (process.env.WEB_ORIGIN ?? "http://localhost:3000")
+      .split(",")
+      .map((value) => value.trim().replace(/\/$/, ""))
+      .filter(Boolean);
+    const normalizedOrigin = origin?.replace(/\/$/, "");
+
+    // Permite chamadas sem Origin (health checks, curl e integrações de servidor)
+    // e reflete somente origens explicitamente configuradas.
+    callback(null, !normalizedOrigin || allowedOrigins.includes(normalizedOrigin));
+  },
   methods: ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 });
 await app.register(multipart, { limits: { files: 1, fileSize: 10 * 1024 * 1024 } });
