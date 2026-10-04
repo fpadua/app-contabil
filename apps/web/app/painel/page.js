@@ -20,23 +20,32 @@ export default function DashboardPage() {
   const updatedToday = processRows.filter((item) => isToday(item.updatedAt)).length;
 
   return <AppShell><section className="workspace module-workspace">
-    <header className="module-header"><div><span className="module-eyebrow">VISÃO GERAL</span><h1>Olá, Fernando</h1><p>Acompanhe os cálculos, processos e índices econômicos.</p></div><Link className="primary-button module-action" href="/calculos/novo"><Calculator size={17} /> Novo cálculo</Link></header>
+    <header className="module-header">
+      <div>
+        <span className="module-eyebrow">VISÃO GERAL</span>
+        <h1>Olá, Fernando</h1>
+        <p>Acompanhe os cálculos, processos e índices econômicos.</p>
+      </div>
+      {/* <Link className="primary-button module-action" href="/calculos/novo">
+        <Calculator size={17} /> Novo cálculo
+      </Link> */}
+    </header>
     {calculations.isLoading || processes.isLoading || indices.isLoading ? <DashboardSkeleton /> : <>
-    <div className="dashboard-cards">
-      <Metric icon={Clock3} label="Em andamento" value={queryValue(calculations, inProgress)} detail={`${inProgress} aguardam conclusão`} />
-      <Metric icon={CheckCircle2} label="Concluídos" value={queryValue(calculations, completed)} detail={`${monthCompleted} neste mês`} tone="green" />
-      <Metric icon={FileStack} label="Processos ativos" value={queryValue(processes, activeProcesses)} detail={`${updatedToday} atualizados hoje`} />
-      <Metric icon={BarChart3} label="Índices monitorados" value={queryValue(indices, indexRows.length)} detail={indexRows.length ? "Dados mais recentes" : "Nenhum índice cadastrado"} tone="green" />
-    </div>
-    <div className="dashboard-grid">
-      <section className="data-card"><div className="card-heading"><div><h2>Cálculos recentes</h2><p>Últimas movimentações registradas</p></div><Link href="/calculos">Ver todos <ArrowRight size={15} /></Link></div>
-        <div className="recent-list">{calculations.isLoading ? <Empty text="Carregando cálculos..." /> : calculationRows.slice(0, 5).map((item) => <RecentCalculation item={item} key={item.id} />)}{!calculations.isLoading && !calculationRows.length && <Empty text="Nenhum cálculo cadastrado." />}</div>
-      </section>
-      <aside className="data-card index-summary"><div className="card-heading"><div><h2>Índices econômicos</h2><p>Competência mais recente</p></div></div>
-        {indices.isLoading ? <Empty text="Carregando índices..." /> : indexRows.slice(0, 5).map((item) => <IndexLine index={item} key={item.id} />)}{!indices.isLoading && !indexRows.length && <Empty text="Nenhum índice cadastrado." />}
-        <Link className="text-link" href="/indices">Consultar histórico <ArrowRight size={15} /></Link>
-      </aside>
-    </div>
+      <div className="dashboard-cards">
+        <Metric icon={Clock3} label="Em andamento" value={queryValue(calculations, inProgress)} detail={`${inProgress} aguardam conclusão`} />
+        <Metric icon={CheckCircle2} label="Concluídos" value={queryValue(calculations, completed)} detail={`${monthCompleted} neste mês`} tone="green" />
+        <Metric icon={FileStack} label="Processos ativos" value={queryValue(processes, activeProcesses)} detail={`${updatedToday} atualizados hoje`} />
+        <Metric icon={BarChart3} label="Índices monitorados" value={queryValue(indices, indexRows.length)} detail={indexRows.length ? "Dados mais recentes" : "Nenhum índice cadastrado"} tone="green" />
+      </div>
+      <div className="dashboard-grid">
+        <section className="data-card"><div className="card-heading"><div><h2>Cálculos recentes</h2><p>Últimas movimentações registradas</p></div><Link href="/calculos">Ver todos <ArrowRight size={15} /></Link></div>
+          <div className="recent-list">{calculations.isLoading ? <Empty text="Carregando cálculos..." /> : calculationRows.slice(0, 5).map((item) => <RecentCalculation item={item} key={item.id} />)}{!calculations.isLoading && !calculationRows.length && <Empty text="Nenhum cálculo cadastrado." />}</div>
+        </section>
+        <aside className="data-card index-summary"><div className="card-heading"><div><h2>Índices econômicos</h2><p>Competência mais recente</p></div></div>
+          {indices.isLoading ? <Empty text="Carregando índices..." /> : indexRows.slice(0, 5).map((item) => <IndexLine index={item} key={item.id} />)}{!indices.isLoading && !indexRows.length && <Empty text="Nenhum índice cadastrado." />}
+          <Link className="text-link" href="/indices">Consultar histórico <ArrowRight size={15} /></Link>
+        </aside>
+      </div>
     </>}
   </section></AppShell>;
 }

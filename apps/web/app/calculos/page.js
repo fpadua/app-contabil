@@ -29,7 +29,8 @@ export default function CalculationsPage() {
         title="Histórico de cálculos"
         description="Cálculos salvos com memória, fonte dos índices e trilha de auditoria."
         actionLabel="Novo cálculo"
-        actionHref="/calculos/novo"
+        // actionHref="/calculos/novo"
+        actionHref="#"
         columns={columns}
         rows={rows}
         rowHref={(row) => `/calculos/${row.id}`}

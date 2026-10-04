@@ -6,14 +6,14 @@ import { BarChart3, BriefcaseBusiness, Calculator, CircleHelp, FileText, Files, 
 
 const navigation = [
   { label: "Painel", icon: Home, href: "/painel" },
-  { label: "Novo cálculo", icon: Calculator, href: "/calculos/novo" },
+  // { label: "Novo cálculo", icon: Calculator, href: "/calculos/novo" },
   { label: "Diferença Salarial", icon: Table2, href: "/planilha" },
   { label: "SAC Habitacional", icon: Landmark, href: "/habitacional" },
   { label: "Cálculos", icon: Files, href: "/calculos" },
   { label: "Processos", icon: BriefcaseBusiness, href: "/processos" },
   { label: "Índices", icon: BarChart3, href: "/indices" },
   { label: "Clientes", icon: Users, href: "/clientes" },
-  { label: "Documentos", icon: FileText, href: "/documentos" },
+  // { label: "Documentos", icon: FileText, href: "/documentos" },
 ];
 
 export function Sidebar() {
