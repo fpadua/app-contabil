@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BarChart3, BriefcaseBusiness, CircleHelp, Files, Home, Landmark, Menu, Table2, Users, X } from "lucide-react";
+import { BarChart3, BriefcaseBusiness, CircleHelp, Files, Home, Landmark, Menu, ShieldCheck, Table2, Users, X } from "lucide-react";
 
 const navigation = [
   { label: "Painel", icon: Home, href: "/painel" },
@@ -54,7 +54,13 @@ export function Sidebar() {
             </Link>;
           })}
         </nav>
-        <div className="trust-card"><span className="quote">“</span><p>Precisão técnica, segurança jurídica e clareza em cada cálculo.</p><div className="leaf-mark">⌁</div></div>
+        <div className="trust-card">
+          <div className="trust-card-icon"><ShieldCheck size={19} strokeWidth={2.2} /></div>
+          <span className="trust-card-kicker">Nosso compromisso</span>
+          <strong className="trust-card-title">Confiança em cada etapa</strong>
+          <p>Precisão técnica, segurança jurídica e clareza em cada cálculo.</p>
+          <div className="trust-card-points"><span>Precisão</span><span>Segurança</span><span>Clareza</span></div>
+        </div>
         <div className="support"><CircleHelp size={32} /><div><strong>Precisa de ajuda?</strong><span>Fale com o suporte</span></div></div>
       </aside>
     </>

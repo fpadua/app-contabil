@@ -273,6 +273,27 @@
   .salary-result-summary-table strong{min-width:0;justify-content:flex-end;white-space:nowrap;font-size:10px}
 }
 
+@media(max-width:780px){
+  .sidebar .trust-card{min-height:0;margin-top:auto;padding:16px 17px 15px;border-color:#e0d9cf;border-radius:10px;background:linear-gradient(145deg,#fbfaf6,#f5f1e9);box-shadow:0 8px 20px rgba(76,61,46,.05)}
+  .sidebar .trust-card .quote{display:block;margin-bottom:8px;font-size:30px;line-height:.7;color:#72816e}
+  .sidebar .trust-card p{max-width:none;margin:0;padding-right:38px;color:#514d47;font-size:12px;line-height:1.5}
+  .sidebar .trust-card .leaf-mark{right:16px;bottom:12px;font-size:34px;line-height:1;color:#aebaa5;opacity:.7;transform:rotate(-18deg)}
+}
+
+.sidebar .trust-card{min-height:148px;padding:18px 17px;border-radius:10px;background:linear-gradient(145deg,#fbfaf6,#f5f1e9);box-shadow:0 8px 20px rgba(76,61,46,.05)}
+.sidebar .trust-card .quote{display:block;margin-bottom:8px;font-size:30px;line-height:.7;color:#72816e}
+.sidebar .trust-card p{max-width:175px;margin:0;padding-right:38px;color:#514d47;font-size:12px;line-height:1.5}
+.sidebar .trust-card .leaf-mark{right:16px;bottom:12px;font-size:34px;line-height:1;color:#aebaa5;opacity:.7;transform:rotate(-18deg)}
+
+.sidebar .trust-card{position:relative;min-height:176px;padding:18px 17px;overflow:hidden;border:0;background:linear-gradient(145deg,#2f3933 0%,#526958 100%);box-shadow:0 14px 28px rgba(47,57,51,.2);color:#fff}
+.sidebar .trust-card::after{content:"";position:absolute;right:-38px;bottom:-46px;width:130px;height:130px;border:1px solid rgba(231,241,226,.22);border-radius:50%;box-shadow:0 0 0 14px rgba(231,241,226,.05),0 0 0 29px rgba(231,241,226,.035)}
+.sidebar .trust-card-icon{position:relative;z-index:1;width:34px;height:34px;display:grid;place-items:center;margin-bottom:13px;border:1px solid rgba(255,255,255,.35);border-radius:10px;background:rgba(255,255,255,.14);color:#e4efdf}
+.sidebar .trust-card-kicker{position:relative;z-index:1;display:block;margin-bottom:4px;color:#d7e5d2;font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.sidebar .trust-card-title{position:relative;z-index:1;display:block;color:#fff;font-family:Georgia,serif;font-size:17px;font-weight:400;line-height:1.15}
+.sidebar .trust-card p{position:relative;z-index:1;max-width:190px;margin:9px 0 14px;padding:0;color:#edf3ea;font-size:11px;line-height:1.45}
+.sidebar .trust-card-points{position:relative;z-index:1;display:flex;gap:5px;flex-wrap:wrap}
+.sidebar .trust-card-points span{padding:4px 7px;border:1px solid rgba(255,255,255,.22);border-radius:999px;color:#e6efe3;font-size:9px;font-weight:700}
+
 .module-mobile-list{display:none}
 .indices-mobile-list{display:none}
 .memory-mobile-list{display:none}
