@@ -56,11 +56,24 @@ export function ModulePage({ eyebrow, title, description, actionLabel, actionHre
             ))}
           </div>
         </div>
+        <div className="module-mobile-list" aria-label={`Lista de ${title}`}>
+          {filteredRows.map((row) => <MobileModuleRow columns={columns} key={row.id} row={row} rowHref={rowHref} />)}
+        </div>
         {filteredRows.length === 0 && <div className="empty-state"><Search size={28} /><strong>Nenhum registro encontrado</strong><span>Tente outro termo de busca.</span></div>}
         </div>
       </>}
     </section>
   );
+}
+
+function MobileModuleRow({ columns, row, rowHref }) {
+  const content = <>
+    <div className="module-mobile-row-heading"><strong>{row[columns[0].key] || "Registro sem título"}</strong>{row.status && <span className={`status-pill ${statusClass(row.status)}`}>{row.status}</span>}</div>
+    <div className="module-mobile-row-meta">
+      {columns.slice(1).filter((column) => column.key !== "status").slice(0, 3).map((column) => <div key={column.key}><span>{column.label}</span><strong>{row[column.key] || "—"}</strong></div>)}
+    </div>
+  </>;
+  return rowHref ? <Link className="module-mobile-row" href={rowHref(row)}>{content}</Link> : <article className="module-mobile-row">{content}</article>;
 }
 
 function ModulePageSkeleton({ columns, statsCount }) {

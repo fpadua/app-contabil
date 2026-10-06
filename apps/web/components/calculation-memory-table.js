@@ -37,16 +37,19 @@ export function CalculationMemoryTable({ data, indexLabel, ariaLabel }) {
   const gridTemplateColumns = columns.map((column) => column.width ?? "minmax(118px, 1fr)").join(" ");
 
   return (
-    <div className="result-table-scroll">
-      <div className="result-table" role="table" aria-label={ariaLabel ?? "Memória de cálculo"} style={{ minWidth: `${Math.max(columns.length * 128, 620)}px` }}>
+    <>
+      <div className="result-table-scroll memory-desktop-table">
+        <div className="result-table" role="table" aria-label={ariaLabel ?? "Memória de cálculo"} style={{ minWidth: `${Math.max(columns.length * 128, 620)}px` }}>
         <div className="result-row header" role="row" style={{ gridTemplateColumns }}>
           {columns.map((column) => <span key={column.key} role="columnheader">{column.label}</span>)}
         </div>
         {allRows.map((row) => <div className={`result-row ${row.id === "final" ? "totals" : ""}`} key={row.id} role="row" style={{ gridTemplateColumns }}>
           {columns.map((column) => <span key={column.key} role="cell">{row[column.key]}</span>)}
         </div>)}
+        </div>
       </div>
-    </div>
+      <MemoryMobileList rows={allRows} columns={columns} />
+    </>
   );
 }
 
@@ -128,18 +131,30 @@ function DetailedSalaryTable({ data, indexLabel, ariaLabel }) {
         </div>}
       </div>
     </div>
-    <div className="result-table-scroll">
-      <div className="result-table" role="table" aria-label={ariaLabel ?? "Memória detalhada de diferenças salariais"} style={{ minWidth }}>
+    <div className="memory-detail-content">
+      <div className="result-table-scroll memory-desktop-table">
+        <div className="result-table" role="table" aria-label={ariaLabel ?? "Memória detalhada de diferenças salariais"} style={{ minWidth }}>
         <div className="result-row header" role="row" style={{ gridTemplateColumns }}>
           {columns.map((column) => <span key={column.key} role="columnheader">{column.label}</span>)}
         </div>
         {rows.map((row) => <div className={`result-row ${row.id === "final" ? "totals" : ""}`} key={row.id} role="row" style={{ gridTemplateColumns }}>
           {columns.map((column) => <span key={column.key} role="cell">{row[column.key]}</span>)}
         </div>)}
+        </div>
       </div>
+      <MemoryMobileList rows={rows} columns={columns} />
     </div>
     <DetailedSalarySummary data={data} />
   </>;
+}
+
+function MemoryMobileList({ rows, columns }) {
+  return <div className="memory-mobile-list" aria-label="Resumo da memória de cálculo">
+    {rows.map((row) => <article className={`memory-mobile-card${row.id === "final" ? " totals" : ""}`} key={row.id}>
+      <div className="memory-mobile-card-heading"><strong>{row.competence}</strong><span>{row.description}</span></div>
+      <div className="memory-mobile-card-values">{columns.filter((column) => column.key !== "competence" && column.key !== "description").map((column) => <div key={column.key}><span>{column.label}</span><strong>{row[column.key]}</strong></div>)}</div>
+    </article>)}
+  </div>;
 }
 
 function buildSalaryRow(months, index) {

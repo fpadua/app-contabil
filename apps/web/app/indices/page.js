@@ -216,6 +216,13 @@ export default function IndicesPage() {
               ))}
             </div>
           </div>
+          <div className="indices-mobile-list" aria-label="Lista de índices econômicos">
+            {(rows ?? []).map((row, rowIndex) => <article className="indices-mobile-card" key={row.id}>
+              <div className="indices-mobile-card-heading"><Link className="index-name-link" href={`/indices/${row.slug}`}>{row.index}</Link>{row.status && <span className={cellClass(row, { key: "status" })}>{row.status}</span>}</div>
+              <div className="indices-mobile-card-meta"><div><span>Competência</span><strong>{row.reference}</strong></div><div><span>Variação mensal</span><strong>{row.monthly}</strong></div><div><span>Acumulado</span><strong>{row.accumulated}</strong></div><div><span>Fonte / origem</span><strong>{row.source} · {row.origin}</strong></div></div>
+              <div className="indices-mobile-card-actions">{rowActions(row, rowIndex >= rows.length - 2)}</div>
+            </article>)}
+          </div>
           {rows && rows.length === 0 && <div className="empty-state"><Search size={28} /><strong>Nenhum registro encontrado</strong><span>Nenhum índice econômico disponível ainda.</span></div>}
           {!rows && <div className="empty-state"><Loader2 className="spinning" size={28} /><strong>Carregando índices...</strong><span>Consultando o banco de dados.</span></div>}
         </div>

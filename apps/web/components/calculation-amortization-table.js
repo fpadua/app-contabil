@@ -38,15 +38,23 @@ export function CalculationAmortizationTable({ data, ariaLabel }) {
   const gridTemplateColumns = columns.map((column) => column.width ?? "minmax(110px, 1fr)").join(" ");
 
   return (
-    <div className="result-table-scroll">
-      <div className="result-table" role="table" aria-label={ariaLabel ?? "Memória de amortização"} style={{ minWidth: `${Math.max(columns.length * 118, 640)}px` }}>
+    <>
+      <div className="result-table-scroll memory-desktop-table">
+        <div className="result-table" role="table" aria-label={ariaLabel ?? "Memória de amortização"} style={{ minWidth: `${Math.max(columns.length * 118, 640)}px` }}>
         <div className="result-row header" role="row" style={{ gridTemplateColumns }}>
           {columns.map((column) => <span key={column.key} role="columnheader">{column.label}</span>)}
         </div>
         {allRows.map((row) => <div className={`result-row ${row.id === "final" ? "totals" : ""}`} key={row.id} role="row" style={{ gridTemplateColumns }}>
           {columns.map((column) => <span key={column.key} role="cell">{row[column.key]}</span>)}
         </div>)}
+        </div>
       </div>
-    </div>
+      <div className="memory-mobile-list" aria-label="Resumo da memória de amortização">
+        {allRows.map((row) => <article className={`memory-mobile-card${row.id === "final" ? " totals" : ""}`} key={row.id}>
+          <div className="memory-mobile-card-heading"><strong>Parcela {row.installmentNumber}</strong><span>{row.competence}</span></div>
+          <div className="memory-mobile-card-values">{columns.filter((column) => column.key !== "installmentNumber" && column.key !== "competence").map((column) => <div key={column.key}><span>{column.label}</span><strong>{row[column.key]}</strong></div>)}</div>
+        </article>)}
+      </div>
+    </>
   );
 }
