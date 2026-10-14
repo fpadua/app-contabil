@@ -3,7 +3,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, Check, ChevronDown, ChevronUp, FileDown, Info, Loader2, Plus, Save, Table2, X } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronUp, FileDown, Info, Loader2, Plus, Save, Table2, X } from "lucide-react";
 import { SalaryPlanilhaGrid } from "./salary-planilha-grid";
 import { api, formatCurrency } from "../lib/api";
 import { downloadCalculationCsv } from "../lib/calculation-export";
@@ -36,9 +36,11 @@ export function SalaryPlanilha() {
   const calculationId = searchParams.get("calculo");
   const [sheet, setSheet] = useState(createPlanilhaSheet);
   const [status, setStatus] = useState(null);
+  const [statusTone, setStatusTone] = useState("info");
   const [issues, setIssues] = useState([]);
   const [incidenceDraft, setIncidenceDraft] = useState(createIncidenceRule);
   const [expandedRules, setExpandedRules] = useState(() => new Set());
+  const [pendingDeleteRule, setPendingDeleteRule] = useState(null);
 
   const clients = useQuery({ queryKey: ["client-options"], queryFn: () => api.get("/api/clients/options") });
   const processes = useQuery({ queryKey: ["process-options"], queryFn: () => api.get("/api/processes/options") });
@@ -66,9 +68,25 @@ export function SalaryPlanilha() {
   const summaryRows = useMemo(() => buildPlanilhaSummaryRows(evaluation), [evaluation]);
   const resultRows = useMemo(() => buildPlanilhaResultRows({ sheet: appliedSheet, evaluation }), [appliedSheet, evaluation]);
 
-  const update = (field, value) => setSheet((current) => ({ ...current, [field]: value }));
+  const showStatus = (message, tone = "info") => {
+    setStatusTone(tone);
+    setStatus(message);
+  };
+  const clearStatus = () => {
+    setStatus(null);
+    setStatusTone("info");
+  };
+  const update = (field, value) => {
+    clearStatus();
+    setSheet((current) => ({ ...current, [field]: value }));
+  };
+  const updateIncidenceDraft = (field, value) => {
+    clearStatus();
+    setIncidenceDraft((current) => ({ ...current, [field]: value }));
+  };
   const [incidenceLoading, setIncidenceLoading] = useState(false);
   const addIncidenceRule = async () => {
+    clearStatus();
     setIncidenceLoading(true);
     try {
       const slug = incidenceIndexSlug(incidenceDraft.index);
@@ -77,35 +95,54 @@ export function SalaryPlanilha() {
       const next = createIncidenceRule({ index: incidenceDraft.index, start: incidenceDraft.start, end: incidenceDraft.end });
       setSheet((current) => ({ ...current, incidenceRules: [...(current.incidenceRules ?? []), next] }));
       setIncidenceDraft(createIncidenceRule());
-      setStatus(`Regra adicionada. Acumulado do período: ${formatIncidenceAccumulated(accumulated, next.index)}. As taxas acompanham a competência de cada linha.`);
+      showStatus(`Regra adicionada. Acumulado do período: ${formatIncidenceAccumulated(accumulated, next.index)}. As taxas acompanham a competência de cada linha.`, "success");
     } catch (error) {
-      setStatus(error.message);
+      showStatus(error.message, "error");
     } finally {
       setIncidenceLoading(false);
     }
   };
-  const removeIncidenceRule = (id) => update("incidenceRules", (sheet.incidenceRules ?? []).filter((rule) => rule.id !== id));
-  const toggleRuleDetails = (id) => setExpandedRules((current) => {
-    const next = new Set(current);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    return next;
-  });
-  const setRows = (rows) => setSheet((current) => ({ ...current, rows }));
+  const requestRemoveIncidenceRule = (rule) => {
+    clearStatus();
+    setPendingDeleteRule(rule);
+  };
+  const removeIncidenceRule = () => {
+    if (!pendingDeleteRule) return;
+    update("incidenceRules", (sheet.incidenceRules ?? []).filter((rule) => rule.id !== pendingDeleteRule.id));
+    setExpandedRules((current) => {
+      const next = new Set(current);
+      next.delete(pendingDeleteRule.id);
+      return next;
+    });
+    setPendingDeleteRule(null);
+  };
+  const toggleRuleDetails = (id) => {
+    clearStatus();
+    setExpandedRules((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const setRows = (rows) => {
+    clearStatus();
+    setSheet((current) => ({ ...current, rows }));
+  };
   const duplicateRow = (index) => setRows([...sheet.rows.slice(0, index + 1), { ...sheet.rows[index], id: createPlanilhaRow().id }, ...sheet.rows.slice(index + 1)]);
   const removeRow = (index) => setRows(sheet.rows.filter((_, current) => current !== index));
 
   const save = useMutation({
     mutationFn: (payload) => api.post("/api/calculations", payload),
     onSuccess: (data) => router.push(`/calculos/${data.id}`),
-    onError: (error) => setStatus(error.message),
+    onError: (error) => showStatus(error.message, "error"),
   });
 
   useEffect(() => {
     const stored = window.sessionStorage.getItem(PLANILHA_STORAGE_KEY);
     if (!stored) return;
     window.sessionStorage.removeItem(PLANILHA_STORAGE_KEY);
-    setSheet(readStoredSheet(stored, setStatus));
+      setSheet(readStoredSheet(stored, showStatus));
   }, []);
 
   useEffect(() => {
@@ -120,9 +157,18 @@ export function SalaryPlanilha() {
     }));
   }, [saved.data]);
 
+  useEffect(() => {
+    if (!pendingDeleteRule) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setPendingDeleteRule(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [pendingDeleteRule]);
+
   function buildSavePayload() {
     if (!incidenceReady || ruleError) {
-      setStatus(ruleError?.message ?? "Aguarde a consulta dos índices para salvar a planilha.");
+      showStatus(ruleError?.message ?? "Aguarde a consulta dos índices para salvar a planilha.", "error");
       return null;
     }
     if (evaluation.issues.length) {
@@ -140,15 +186,17 @@ export function SalaryPlanilha() {
   }
 
   function handleSave() {
+    clearStatus();
     const payload = buildSavePayload();
     if (payload) save.mutate(payload);
   }
 
   function handleDownloadCsv() {
+    clearStatus();
     const payload = buildSavePayload();
     if (!payload) return;
     downloadCalculationCsv({ ...payload.result, title: payload.title, calculationType: payload.calculationType });
-    setStatus("Planilha baixada em CSV.");
+    showStatus("Planilha baixada em CSV.", "success");
   }
 
   const visibleProcesses = (processes.data ?? []).filter((process) => !sheet.clientId || process.clientId === sheet.clientId);
@@ -162,14 +210,14 @@ export function SalaryPlanilha() {
         </div>
         <div className="top-actions">
           <button className="secondary-button" onClick={handleDownloadCsv} type="button"><FileDown size={17} /> Baixar CSV</button>
-          <button className="secondary-button" onClick={() => router.push("/calculos/novo")} type="button"><Table2 size={17} /> Assistente</button>
+          {/* <button className="secondary-button" onClick={() => router.push("/calculos/novo")} type="button"><Table2 size={17} /> Assistente</button> */}
           <button className="primary-button" disabled={save.isPending} onClick={handleSave} type="button">
             {save.isPending ? <Loader2 className="spinning" size={17} /> : <Save size={17} />} {save.isPending ? "Salvando..." : "Salvar cálculo"}
           </button>
         </div>
       </header>
 
-      {status && <div className="module-status" role="status"><Info size={15} /> {status}</div>}
+      {status && <div className={`module-status ${statusTone}`} role={statusTone === "error" ? "alert" : "status"}>{statusTone === "success" ? <CheckCircle2 size={15} /> : <Info size={15} />} {status}</div>}
       {(ruleError || !incidenceReady) && sheet.incidenceRules.length > 0 && <div className={`module-status${ruleError ? " error" : ""}`} role={ruleError ? "alert" : "status"}>{ruleError?.message ?? "Consultando índices das regras de incidência..."}</div>}
       {saved.isError && <div className="module-status error" role="alert">Não foi possível abrir o cálculo informado.</div>}
       {linksUnavailable && <div className="module-status" role="status">Não foi possível consultar clientes e processos. Verifique se a API está em execução — o cálculo da planilha e o salvamento continuam disponíveis, mas o vínculo fica indisponível.</div>}
@@ -195,9 +243,9 @@ export function SalaryPlanilha() {
       <section className="planilha-rules" aria-label="Regras de incidência">
         <div className="planilha-rules-heading"><div><span className="planilha-rules-kicker">CONFIGURAÇÃO</span><h2>Regras de incidência</h2><p>Informe o índice e o período. O acumulado é calculado para cada lançamento conforme sua competência.</p></div><span className="planilha-rules-note">A Selic prevalece nos meses em que há taxa Selic publicada.</span></div>
         <div className="planilha-rule-form">
-          <label className="field"><span>Índice</span><select value={incidenceDraft.index} onChange={(event) => setIncidenceDraft((current) => ({ ...current, index: event.target.value }))}><option value="ipca_e">IPCA-E</option><option value="selic">Selic</option><option value="juros">Juros moratórios (poupança)</option></select></label>
-          <label className="field"><span>Início (MM/AAAA)</span><input inputMode="numeric" maxLength={7} value={maskPlanilhaCompetence(incidenceDraft.start)} onChange={(event) => setIncidenceDraft((current) => ({ ...current, start: maskPlanilhaCompetence(event.target.value) }))} placeholder="07/2021" /></label>
-          <label className="field"><span>Fim (MM/AAAA)</span><input inputMode="numeric" maxLength={7} value={maskPlanilhaCompetence(incidenceDraft.end)} onChange={(event) => setIncidenceDraft((current) => ({ ...current, end: maskPlanilhaCompetence(event.target.value) }))} placeholder="10/2021" /></label>
+          <label className="field"><span>Índice</span><select value={incidenceDraft.index} onChange={(event) => updateIncidenceDraft("index", event.target.value)}><option value="ipca_e">IPCA-E</option><option value="selic">Selic</option><option value="juros">Juros moratórios (poupança)</option></select></label>
+          <label className="field"><span>Início (MM/AAAA)</span><input inputMode="numeric" maxLength={7} value={maskPlanilhaCompetence(incidenceDraft.start)} onChange={(event) => updateIncidenceDraft("start", maskPlanilhaCompetence(event.target.value))} placeholder="07/2021" /></label>
+          <label className="field"><span>Fim (MM/AAAA)</span><input inputMode="numeric" maxLength={7} value={maskPlanilhaCompetence(incidenceDraft.end)} onChange={(event) => updateIncidenceDraft("end", maskPlanilhaCompetence(event.target.value))} placeholder="10/2021" /></label>
           <button className="add-rule-button" disabled={incidenceLoading} onClick={addIncidenceRule} type="button"><Plus size={16} /> {incidenceLoading ? "Calculando..." : "Adicionar regra"}</button>
         </div>
         <div className="planilha-rule-list">
@@ -217,12 +265,12 @@ export function SalaryPlanilha() {
                 <span className="planilha-rule-card-result"><span>Acumulado do período</span><strong>{formatRuleSummary(rule, indexValues, sheet.incidenceRules)}</strong></span>
                 <span className="planilha-rule-card-chevron" aria-hidden="true">{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
               </button>
-              <button aria-label={`Remover regra ${incidenceLabel(rule.index)} de ${rule.start} a ${rule.end}`} className="planilha-rule-card-remove" onClick={() => removeIncidenceRule(rule.id)} type="button"><X size={16} /></button>
+              <button aria-label={`Remover regra ${incidenceLabel(rule.index)} de ${rule.start} a ${rule.end}`} className="planilha-rule-card-remove" onClick={() => requestRemoveIncidenceRule(rule)} type="button"><X size={16} /></button>
               {expanded && <div className="planilha-rule-detail" id={detailId}>
                 <div className="planilha-rule-detail-heading"><strong>Conferência mensal</strong><span>{rule.start} a {rule.end} · valores consultados no índice cadastrado</span></div>
-                {breakdown ? <div className="planilha-rule-detail-scroll"><table><thead><tr><th>Competência</th><th>Mês da taxa</th><th>Taxa publicada</th><th>Taxa aplicada</th><th>Acumulado restante</th><th>Aplicação</th></tr></thead><tbody>
+                {breakdown ? <div className={`planilha-rule-detail-scroll${breakdown.rows.length > 10 ? " scrollable" : ""}`}><table><thead><tr><th>Competência</th><th>Taxa publicada</th><th>Taxa aplicada</th><th>Acumulado restante</th><th>Aplicação</th></tr></thead><tbody>
                   {breakdown.rows.map((row) => <tr key={`${rule.id}-${row.month}`}>
-                    <td>{formatMonthNumber(row.month)}</td><td>{row.sourceMonth == null ? "—" : formatMonthNumber(row.sourceMonth)}</td>
+                    <td>{formatMonthNumber(row.month)}</td>
                     <td>{row.sourceRate == null ? "—" : formatRuleRate(row.sourceRate, rule.index)}</td>
                     <td>{row.appliedRate == null ? "—" : formatRuleRate(row.appliedRate, rule.index)}</td>
                     <td>{formatIncidenceAccumulated(row.accumulated, rule.index)}</td>
@@ -251,16 +299,29 @@ export function SalaryPlanilha() {
       />
 
       <PlanilhaResults evaluation={evaluation} resultRows={resultRows} summaryRows={summaryRows} />
+
+      {pendingDeleteRule && <div className="confirmation-backdrop" onClick={() => setPendingDeleteRule(null)}>
+        <div aria-labelledby="delete-rule-title" aria-modal="true" className="confirmation-dialog" onClick={(event) => event.stopPropagation()} role="dialog">
+          <div className="confirmation-dialog-main">
+            <div className="confirmation-dialog-content">
+            <h2 id="delete-rule-title"><span className="confirmation-dialog-icon"><AlertTriangle size={20} /></span>Excluir regra de incidência?</h2>
+            <p>Você está removendo a regra <strong>{incidenceLabel(pendingDeleteRule.index)}</strong>, de <strong>{pendingDeleteRule.start}</strong> a <strong>{pendingDeleteRule.end}</strong>.</p>
+            <div className="confirmation-dialog-impact"><strong>Impacto no cálculo</strong><span>As competências desse período serão recalculadas usando apenas as regras restantes. Se não houver outra regra aplicável, a taxa dessa incidência deixará de ser considerada.</span></div>
+            </div>
+          </div>
+          <div className="confirmation-dialog-actions"><button className="back-button" onClick={() => setPendingDeleteRule(null)} type="button">Cancelar</button><button className="danger-button" onClick={removeIncidenceRule} type="button">Excluir regra</button></div>
+        </div>
+      </div>}
     </section>
   );
 }
 
-function readStoredSheet(stored, setStatus) {
+function readStoredSheet(stored, showStatus) {
   try {
-    setStatus("Lançamentos do assistente importados. Os valores devido e recebido passam a ser calculados pelas células da grade.");
+    showStatus("Lançamentos do assistente importados. Os valores devido e recebido passam a ser calculados pelas células da grade.", "success");
     return createPlanilhaSheet(JSON.parse(stored));
   } catch {
-    setStatus("Não foi possível ler os lançamentos enviados pelo assistente. A planilha foi aberta em branco.");
+    showStatus("Não foi possível ler os lançamentos enviados pelo assistente. A planilha foi aberta em branco.", "error");
     return createPlanilhaSheet();
   }
 }

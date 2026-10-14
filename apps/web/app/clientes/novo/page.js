@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AppShell } from "../../../components/app-shell";
 import { FormActions, FormSection, RecordFormLayout } from "../../../components/record-form-layout";
 import { api } from "../../../lib/api";
+import { maskDocument, maskPhone } from "../../../lib/client-format";
 
 export default function NewClientPage() {
   const router = useRouter();
@@ -46,14 +47,14 @@ export default function NewClientPage() {
             </div>
             <div className="fields-grid compact">
               <label className="field field-wide"><span>{personType === "Pessoa física" ? "Nome completo" : "Razão social"} *</span><input autoFocus name="name" placeholder={personType === "Pessoa física" ? "Ex.: Maria da Silva" : "Ex.: Empresa Silva Ltda."} required /></label>
-              <label className="field"><span>{personType === "Pessoa física" ? "CPF" : "CNPJ"} *</span><input inputMode="numeric" name="document" placeholder={personType === "Pessoa física" ? "000.000.000-00" : "00.000.000/0000-00"} required /></label>
+              <label className="field"><span>{personType === "Pessoa física" ? "CPF" : "CNPJ"} *</span><input inputMode="numeric" key={personType} name="document" onChange={(event) => { event.target.value = maskDocument(event.target.value, personType); }} placeholder={personType === "Pessoa física" ? "000.000.000-00" : "00.000.000/0000-00"} required /></label>
               <label className="field"><span>Situação</span><select defaultValue="Ativo" name="status"><option>Ativo</option><option>Inativo</option></select></label>
             </div>
           </FormSection>
           <FormSection number="2" title="Contato" description="Dados usados nas comunicações relacionadas ao atendimento.">
             <div className="fields-grid compact">
-              <label className="field"><span>E-mail *</span><input name="email" placeholder="cliente@email.com" required type="email" /></label>
-              <label className="field"><span>Telefone</span><input inputMode="tel" name="phone" placeholder="(62) 99999-9999" /></label>
+              <label className="field"><span>E-mail</span><input name="email" placeholder="cliente@email.com" type="email" /></label>
+              <label className="field"><span>Telefone</span><input inputMode="tel" name="phone" onChange={(event) => { event.target.value = maskPhone(event.target.value); }} placeholder="(62) 99999-9999" /></label>
               <label className="field field-wide"><span>Observações</span><textarea name="notes" placeholder="Inclua informações adicionais, se necessário." rows="4" /></label>
             </div>
           </FormSection>

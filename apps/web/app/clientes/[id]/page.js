@@ -8,6 +8,7 @@ import { ArrowLeft, Calculator, FileText, Loader2, Pencil, X } from "lucide-reac
 import { AppShell } from "../../../components/app-shell";
 import { api, formatDate, formatRequired } from "../../../lib/api";
 import { indexLabel } from "../../../lib/calculation-export";
+import { maskDocument, maskPhone } from "../../../lib/client-format";
 
 export default function ClientDetailPage() {
   const { id } = useParams();
@@ -75,7 +76,7 @@ export default function ClientDetailPage() {
           <div className="stat-grid">
             <Stat label="Processos vinculados" value={String(linkedProcesses.length)} hint="Consultas e demandas" />
             <Stat label="Cálculos vinculados" value={String(linkedCalculations.length)} hint="Memórias registradas" />
-            <Stat label="Documento" value={formatRequired(record.document)} hint={formatRequired(record.email)} />
+            <Stat label="Documento" value={formatRequired(maskDocument(record.document, record.personType))} hint={formatRequired(record.email)} />
           </div>
 
           <div className="detail-grid">
@@ -83,9 +84,9 @@ export default function ClientDetailPage() {
               <div className="card-heading"><div><h2>Dados do cadastro</h2><p>{editing ? "Edite e salve as alterações" : "Informações registradas"}</p></div></div>
               <div className="index-line"><span>Tipo de pessoa</span><strong>{record.personType}</strong></div>
               <div className="index-line"><span>Nome / razão social</span><strong>{record.name}</strong></div>
-              <div className="index-line"><span>Documento</span><strong>{formatRequired(record.document)}</strong></div>
+              <div className="index-line"><span>Documento</span><strong>{formatRequired(maskDocument(record.document, record.personType))}</strong></div>
               <div className="index-line"><span>E-mail</span><strong>{formatRequired(record.email)}</strong></div>
-              <div className="index-line"><span>Telefone</span><strong>{formatRequired(record.phone)}</strong></div>
+              <div className="index-line"><span>Telefone</span><strong>{formatRequired(maskPhone(record.phone))}</strong></div>
               <div className="index-line"><span>Situação</span><strong>{record.status}</strong></div>
               {record.notes && <div className="index-line"><span>Observações</span><strong>{record.notes}</strong></div>}
 
@@ -95,10 +96,10 @@ export default function ClientDetailPage() {
                 </div>
                 <div className="fields-grid compact">
                   <label className="field field-wide"><span>Nome completo / razão social *</span><input defaultValue={record.name} name="name" required /></label>
-                  <label className="field"><span>Documento</span><input defaultValue={record.document ?? ""} name="document" /></label>
+                  <label className="field"><span>{personType === "Pessoa física" ? "CPF" : "CNPJ"}</span><input defaultValue={maskDocument(record.document, personType)} inputMode="numeric" key={personType} name="document" onChange={(event) => { event.target.value = maskDocument(event.target.value, personType); }} /></label>
                   <label className="field"><span>Situação</span><select defaultValue={record.status} name="status"><option>Ativo</option><option>Inativo</option></select></label>
                   <label className="field"><span>E-mail</span><input defaultValue={record.email ?? ""} name="email" type="email" /></label>
-                  <label className="field"><span>Telefone</span><input defaultValue={record.phone ?? ""} name="phone" /></label>
+                  <label className="field"><span>Telefone</span><input defaultValue={maskPhone(record.phone)} inputMode="tel" name="phone" onChange={(event) => { event.target.value = maskPhone(event.target.value); }} /></label>
                   <label className="field field-wide"><span>Observações</span><textarea defaultValue={record.notes ?? ""} name="notes" rows="3" /></label>
                 </div>
                 {formError && <p className="field-error" role="alert">{formError}</p>}
